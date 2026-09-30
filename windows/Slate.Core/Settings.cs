@@ -20,6 +20,9 @@ public sealed class SlateSettings
     public bool PreserveAspect { get; set; } = true;
     public BarrelMode BarrelMode { get; set; } = BarrelMode.RightClick;
 
+    /// <summary>How line breaks in handwriting are typed. Shift+Enter keeps chat apps from sending.</summary>
+    public NewlineMode NewlineMode { get; set; } = NewlineMode.ShiftEnter;
+
     /// <summary>Exponent applied to pressure; &lt;1 soft, 1 linear, &gt;1 firm.</summary>
     public double PressureGamma { get; set; } = 1.0;
 

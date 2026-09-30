@@ -13,6 +13,7 @@ internal sealed class SettingsForm : Form
     private readonly Label _regionLabel = Wrapping();
     private readonly CheckBox _aspect = new() { Text = "Keep aspect ratio (tablet shows the active area)", AutoSize = true };
     private readonly ComboBox _barrel = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 320 };
+    private readonly ComboBox _newlines = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 320 };
     private readonly TrackBar _pressure = new() { Minimum = 0, Maximum = 20, TickFrequency = 5, Width = 240 };
     private readonly CurvePreview _curve = new() { Size = new Size(64, 64) };
     private readonly CheckBox _usbEnabled = new() { Text = "USB (lowest latency; needs USB debugging)", AutoSize = true };
@@ -21,6 +22,13 @@ internal sealed class SettingsForm : Form
     private readonly Label _adb = Wrapping();
     private readonly Label _hint = Wrapping();
     private bool _loading;
+
+    private static readonly (NewlineMode Mode, string Text)[] NewlineChoices =
+    {
+        (NewlineMode.ShiftEnter, "Shift+Enter (new line; doesn't send in chat apps)"),
+        (NewlineMode.Enter, "Enter"),
+        (NewlineMode.Space, "Space"),
+    };
 
     private static readonly (BarrelMode Mode, string Text)[] BarrelChoices =
     {
@@ -53,10 +61,12 @@ internal sealed class SettingsForm : Form
         root.Controls.Add(Group("Map the tablet to", _monitor, _regionLabel, regionButtons, _aspect));
 
         _barrel.Items.AddRange(BarrelChoices.Select(c => (object)c.Text).ToArray());
+        _newlines.Items.AddRange(NewlineChoices.Select(c => (object)c.Text).ToArray());
         var pressureRow = Row(new Label { Text = "Soft", AutoSize = true, Anchor = AnchorStyles.Left }, _pressure,
             new Label { Text = "Firm", AutoSize = true, Anchor = AnchorStyles.Left }, _curve);
         root.Controls.Add(Group("Pen",
             new Label { Text = "S Pen button:", AutoSize = true }, _barrel,
+            new Label { Text = "Line breaks in handwriting typed as:", AutoSize = true }, _newlines,
             new Label { Text = "Pressure feel:", AutoSize = true }, pressureRow));
 
         var codeRow = Row(new Label { Text = "Wi-Fi pairing code:", AutoSize = true, Anchor = AnchorStyles.Left }, _code,
@@ -85,6 +95,12 @@ internal sealed class SettingsForm : Form
             Changed();
         };
         _aspect.CheckedChanged += (_, _) => { if (!_loading) { _app.Settings.PreserveAspect = _aspect.Checked; Changed(); } };
+        _newlines.SelectedIndexChanged += (_, _) =>
+        {
+            if (_loading || _newlines.SelectedIndex < 0) return;
+            _app.Settings.NewlineMode = NewlineChoices[_newlines.SelectedIndex].Mode;
+            Changed();
+        };
         _barrel.SelectedIndexChanged += (_, _) =>
         {
             if (_loading || _barrel.SelectedIndex < 0) return;
@@ -132,6 +148,7 @@ internal sealed class SettingsForm : Form
             : $"Region: {t.Width}×{t.Height} at {t.X},{t.Y}";
         _aspect.Checked = s.PreserveAspect;
         _barrel.SelectedIndex = Array.FindIndex(BarrelChoices, c => c.Mode == s.BarrelMode);
+        _newlines.SelectedIndex = Array.FindIndex(NewlineChoices, c => c.Mode == s.NewlineMode);
         _pressure.Value = GammaToSlider(s.PressureGamma);
         _curve.Gamma = s.PressureGamma;
         _usbEnabled.Checked = s.UsbEnabled;

@@ -94,6 +94,7 @@ internal static class Native
     public const uint KEYEVENTF_KEYUP = 0x0002;
     public const uint KEYEVENTF_UNICODE = 0x0004;
     public const ushort VK_RETURN = 0x0D;
+    public const ushort VK_SHIFT = 0x10;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct KEYBDINPUT
