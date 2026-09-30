@@ -93,6 +93,13 @@ class Ink {
         drawing = null
         version++
     }
+
+    /** Puts back strokes that were taken away (e.g. writing that couldn't be typed), before any newer ones. */
+    fun restore(old: List<Stroke>) {
+        if (old.isEmpty()) return
+        strokes.addAll(0, old)
+        version++
+    }
 }
 
 /** Geometry for rendering ink to an image. Pure math so it can be unit-tested. */

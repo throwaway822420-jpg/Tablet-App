@@ -64,7 +64,9 @@ administrator unless Slate also runs as administrator.
 
 On the drawing surface, the tab on the middle of the right edge switches between **Pen** (the S Pen
 drives the PC's pen) and **Write**. In Write mode the ink stays on the tablet. Tap **Enter** and
-the PC types what you wrote into whatever text field has focus. Equations come out as Unicode
+the PC types what you wrote into whatever text field has focus. The page clears the moment you tap
+Enter, so you can carry on writing; each Enter's text is typed in order as soon as it's ready, and
+anything that can't be read or typed comes back onto the page. Equations come out as Unicode
 (`x² + √2 ≤ π`, `(x+1)/(x−1)`). **Undo** and **Clear** edit the ink, and the eraser end or the
 held S Pen button erases whole strokes.
 

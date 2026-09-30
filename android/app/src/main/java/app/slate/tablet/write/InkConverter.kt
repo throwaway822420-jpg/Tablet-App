@@ -21,6 +21,10 @@ interface InkListener {
  * the result usually appears straight away. Any new stroke makes the earlier result stale; it's
  * ignored and a fresh request goes out at the next pause.
  *
+ * With [clearOnEnter] (writing), Enter takes the ink off the page at once so you can keep writing;
+ * each Enter's text is typed in order as it's ready, and writing that fails comes back to the page.
+ * Without it (calculator), the ink stays and the result is shown and delivered in place.
+ *
  * All methods run on the main thread.
  */
 class InkConverter<R : Any>(
@@ -31,8 +35,9 @@ class InkConverter<R : Any>(
     private val isEmpty: (R) -> Boolean,
     /** Hands the result on; call done(null) on success or done(message) on failure. */
     private val deliver: (R, done: (String?) -> Unit) -> Unit,
-    /** Clear the ink after a successful delivery (writing) or keep it (calculator). */
-    private val clearAfterDelivery: Boolean,
+    private val clearOnEnter: Boolean,
+    /** Redraws the ink after the converter changed it. */
+    private val redraw: () -> Unit,
     private val onState: (State<R>) -> Unit,
 ) : InkListener {
     sealed interface State<out R> {
@@ -45,15 +50,27 @@ class InkConverter<R : Any>(
         data class Failed(val message: String) : State<Nothing>
     }
 
+    /** Ink already taken off the page by Enter, waiting to be converted and typed. */
+    private class Queued<R>(val version: Int, val strokes: List<Stroke>, val enterAtMs: Long) {
+        var result: R? = null
+        var error: String? = null
+    }
+
     private val main = Handler(Looper.getMainLooper())
     private val pause = Runnable { startRequest() }
 
     private var resultVersion = -1
     private var result: R? = null
-    private var inFlightVersion = -1
+    private val inFlight = HashSet<Int>()
+
+    // Calculator (ink stays on the page).
     private var deliveringVersion = -1
     private var enterVersion = -1
     private var enterAtMs = 0L
+
+    // Writing (ink cleared on Enter).
+    private val queue = ArrayDeque<Queued<R>>()
+    private var queueDelivering = false
 
     /** The latest result for the current ink, if any. */
     val current: R? get() = result.takeIf { resultVersion == ink.version }
@@ -63,17 +80,17 @@ class InkConverter<R : Any>(
         // Open the connection to Anthropic while you write, so the first conversion doesn't wait for it.
         app.slate.tablet.ai.Claude.warmUp(apiKey())
         enterVersion = -1
-        onState(State.Writing)
+        if (queue.isEmpty()) onState(State.Writing)
     }
 
     override fun onInkChanged() {
         main.removeCallbacks(pause)
         enterVersion = -1
         if (ink.isEmpty) {
-            onState(State.Empty)
+            if (queue.isEmpty()) onState(State.Empty)
             return
         }
-        onState(State.Writing)
+        if (queue.isEmpty()) onState(State.Writing)
         if (apiKey().isNotBlank()) main.postDelayed(pause, PAUSE_MS)
     }
 
@@ -87,7 +104,7 @@ class InkConverter<R : Any>(
                 else -> State.Writing
             },
         )
-        if (!ink.isEmpty && r == null && inFlightVersion != ink.version && apiKey().isNotBlank()) main.postDelayed(pause, PAUSE_MS)
+        if (!ink.isEmpty && r == null && ink.version !in inFlight && apiKey().isNotBlank()) main.postDelayed(pause, PAUSE_MS)
     }
 
     fun enter() {
@@ -98,13 +115,23 @@ class InkConverter<R : Any>(
         }
         main.removeCallbacks(pause)
         val v = ink.version
+        if (clearOnEnter) {
+            val q = Queued<R>(v, ink.snapshot(), SystemClock.uptimeMillis())
+            q.result = current
+            queue.addLast(q)
+            if (q.result == null && v !in inFlight) request(v, q.strokes)
+            ink.clear()
+            redraw()
+            pump()
+            return
+        }
         if (deliveringVersion == v) return // already on its way
         enterVersion = v
         enterAtMs = SystemClock.uptimeMillis()
         val r = current
         when {
             r != null -> deliverNow(r)
-            inFlightVersion == v -> onState(State.Converting)
+            v in inFlight -> onState(State.Converting)
             else -> startRequest()
         }
     }
@@ -112,13 +139,17 @@ class InkConverter<R : Any>(
     fun cancelPending() = main.removeCallbacks(pause)
 
     private fun startRequest() {
-        val key = apiKey()
-        if (ink.isEmpty || key.isBlank()) return
+        if (ink.isEmpty || apiKey().isBlank()) return
         val v = ink.version
-        if (resultVersion == v || inFlightVersion == v) return
-        val strokes = ink.snapshot()
-        inFlightVersion = v
+        if (resultVersion == v || v in inFlight) return
         if (enterVersion == v) onState(State.Converting)
+        request(v, ink.snapshot())
+    }
+
+    private fun request(v: Int, strokes: List<Stroke>) {
+        val key = apiKey()
+        if (key.isBlank()) return
+        inFlight += v
         val started = SystemClock.uptimeMillis()
         POOL.execute {
             val outcome = try {
@@ -136,7 +167,12 @@ class InkConverter<R : Any>(
     }
 
     private fun onResult(v: Int, outcome: Result<R>) {
-        if (inFlightVersion == v) inFlightVersion = -1
+        inFlight -= v
+        queue.firstOrNull { it.version == v }?.let { q ->
+            outcome.onSuccess { q.result = it }.onFailure { q.error = it.message ?: "Conversion failed." }
+            pump()
+            return
+        }
         if (v != ink.version) return // the ink changed since; a newer request will follow
         outcome.onSuccess { r ->
             resultVersion = v
@@ -151,6 +187,40 @@ class InkConverter<R : Any>(
         }
     }
 
+    /** Types queued writing in the order Enter was pressed, one at a time. */
+    private fun pump() {
+        if (queueDelivering) return
+        val q = queue.firstOrNull() ?: return
+        val r = q.result
+        val error = q.error ?: if (r != null && isEmpty(r)) "Couldn't read any writing there." else null
+        if (error != null) {
+            queue.removeFirst()
+            giveBack(q, error)
+            pump()
+            return
+        }
+        if (r == null) {
+            onState(State.Converting)
+            return
+        }
+        queueDelivering = true
+        onState(State.Delivering(r))
+        deliver(r) { err ->
+            queueDelivering = false
+            queue.remove(q)
+            if (err != null) giveBack(q, err) else onState(State.Delivered(r, SystemClock.uptimeMillis() - q.enterAtMs))
+            pump()
+        }
+    }
+
+    /** Writing that couldn't be typed goes back on the page, so it isn't lost. */
+    private fun giveBack(q: Queued<R>, error: String) {
+        ink.restore(q.strokes)
+        redraw()
+        onInkChanged()
+        onState(State.Failed(error))
+    }
+
     private fun deliverNow(r: R) {
         enterVersion = -1
         if (isEmpty(r)) {
@@ -162,13 +232,7 @@ class InkConverter<R : Any>(
         onState(State.Delivering(r))
         deliver(r) { error ->
             if (deliveringVersion == v) deliveringVersion = -1
-            if (error != null) {
-                onState(State.Failed(error))
-                return@deliver
-            }
-            // Only clear if nothing was written while the result was on its way.
-            if (clearAfterDelivery && ink.version == v) ink.clear()
-            onState(State.Delivered(r, SystemClock.uptimeMillis() - enterAtMs))
+            onState(if (error != null) State.Failed(error) else State.Delivered(r, SystemClock.uptimeMillis() - enterAtMs))
         }
     }
 

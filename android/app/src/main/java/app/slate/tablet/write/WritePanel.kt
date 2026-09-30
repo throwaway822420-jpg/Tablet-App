@@ -67,7 +67,8 @@ class WritePanel(
         convert = { key, png -> Recognizer.recognize(key, png, settings.fast) },
         isEmpty = { it.isEmpty },
         deliver = { t, done -> target.type(t, effectiveMode(), done) },
-        clearAfterDelivery = true,
+        clearOnEnter = true,
+        redraw = { writeView.invalidate() },
         onState = ::showWriteState,
     )
 
@@ -76,7 +77,8 @@ class WritePanel(
         convert = { key, png -> Calculator.solve(key, png) },
         isEmpty = { it.answer.isEmpty },
         deliver = { c, done -> target.copy(c.answer, effectiveMode(), done) },
-        clearAfterDelivery = false,
+        clearOnEnter = false,
+        redraw = { writeView.invalidate() },
         onState = ::showCalcState,
     )
 
