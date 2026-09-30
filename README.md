@@ -19,7 +19,7 @@ This is a pen-input bridge, not a screen mirror. No video goes to the tablet.
 | Folder | What |
 |---|---|
 | [`protocol/PROTOCOL.md`](protocol/PROTOCOL.md) | The wire format: 32-byte little-endian packets. Single source of truth. |
-| `android/` | Kotlin app, min SDK 29, no third-party dependencies. |
+| `android/` | Kotlin app, min SDK 29. Only dependency: the Anthropic Java SDK, for write mode. |
 | `windows/Slate.Core/` | Portable .NET 8 library: protocol, pen state machine, mapping, USB and Wi-Fi transports. Tested on any OS. |
 | `windows/Slate/` | The WinForms tray app: synthetic pen injection, settings window, region picker. |
 | `windows/Slate.Core.Tests/` | xUnit tests, including end-to-end USB/Wi-Fi sessions over real sockets with a fake tablet. |
@@ -60,11 +60,32 @@ Use Windows Ink / pointer input: in Krita, *Settings › Configure Krita › Tab
 8+ Pointer Input*; Photoshop uses Windows Ink by default. Slate can't inject into apps running as
 administrator unless Slate also runs as administrator.
 
+## Write mode: handwriting to text
+
+On the drawing surface, the tab on the middle of the right edge switches between **Pen** (the S Pen
+drives the PC's pen) and **Write**. In Write mode the ink stays on the tablet. Tap **Enter** and
+the PC types what you wrote into whatever text field has focus. Equations come out as Unicode
+(`x² + √2 ≤ π`, `(x+1)/(x−1)`). **Undo** and **Clear** edit the ink, and the eraser end or the
+held S Pen button erases whole strokes.
+
+- **Recognition** uses Claude Sonnet 5.5 (`claude-sonnet-5-5`) with thinking off
+  (`between_tools`), JSON output so the reply is only the transcription, and server-side refusal
+  fallback. The ink is rendered black on white, cropped and scaled to at most 1400 px.
+- **Convert on pause:** after 0.8 s without the pen touching, the ink is sent for recognition in
+  the background. If nothing changed by the time you tap Enter, that result (or the request still
+  in flight) is used, so the text usually appears straight away. A new stroke makes the earlier
+  result stale, and a new request goes out at the next pause.
+- **Cost:** your own Anthropic API key (entered on the tablet's main screen, stored in app-private
+  storage), billed to that account. Roughly a third of a cent per conversion, and convert-on-pause
+  makes about 1.5–2 requests per Enter. The writing image is sent to Anthropic.
+- The PC types with Unicode keystrokes, so any character works regardless of keyboard layout.
+  Windows doesn't let it type into apps running as administrator unless Slate does too.
+
 ## Tests
 
 ```sh
-cd windows && dotnet test                 # 43 tests: protocol, state machine, mapping, transports
-cd android && ./gradlew testDebugUnitTest # protocol golden vector, tilt conversion, normalization
+cd windows && dotnet test                 # 46 tests: protocol, state machine, mapping, transports, text
+cd android && ./gradlew testDebugUnitTest # 25 tests: protocol, tilt, area layout, ink, text chunks, API request shape
 ```
 
 Both suites check the same golden packet from `PROTOCOL.md`, so the two ends can't drift apart.

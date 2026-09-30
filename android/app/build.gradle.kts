@@ -17,7 +17,10 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 cuts the Anthropic SDK's dependencies (Jackson, OkHttp, Kotlin reflection) down to
+            // what's used; proguard-rules.pro keeps the classes they reach by reflection.
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Debug-signed so a fresh clone can build an installable release APK; use your own key to publish.
             signingConfig = signingConfigs.getByName("debug")
         }
@@ -36,5 +39,7 @@ android {
 }
 
 dependencies {
+    implementation("com.anthropic:anthropic-java:2.66.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("com.fasterxml.jackson.core:jackson-databind:2.19.4")
 }

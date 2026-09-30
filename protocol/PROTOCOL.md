@@ -45,6 +45,8 @@ A receiver that gets a packet whose `version` it doesn't support replies
 | 6 | `PONG`     | PC → tablet | `8 u32 echoTimestampMs` (the `timestampMs` of the `PING` being answered) |
 | 7 | `DISCOVER` | PC → broadcast | `8 u16 udpPort` (normally 47811), `12..27` PC name, UTF-8, NUL-padded (16 bytes) |
 | 8 | `BYE`      | either | `8 u8 reason`: 0 normal, 1 wrong pairing code, 2 PC busy with another tablet, 3 unsupported version |
+| 9 | `TEXT`     | tablet → PC | One chunk of text for the PC to type: `8 u16 textId`, `10 u8 chunkIndex`, `11 u8 chunkCount` (1–255), `12..27` chunk, UTF-8, NUL-padded (16 bytes) |
+| 10 | `TEXT_ACK` | PC → tablet | `8 u16 textId`: the whole message arrived and was typed |
 
 ### `PEN` payload
 
@@ -101,6 +103,18 @@ twist, so Android never sets `HAS_ROTATION`.
   it out of range before doing anything else.
 - The tablet sends pen-up + `LEAVE` when its canvas loses focus, pauses or
   the screen turns off.
+
+### Text (write mode)
+
+Write mode turns handwriting into text on the tablet and sends it as a `TEXT` message:
+
+- The text is split into chunks of at most 16 UTF-8 bytes, never inside a character, so each
+  chunk is valid UTF-8 on its own. At most 255 chunks (about 4 KB) per message.
+- The PC collects chunks by `textId` in any order. Once it has all `chunkCount` of them it
+  lifts the pen, types the concatenated text into the focused window (`\n` as Enter), and replies
+  `TEXT_ACK`.
+- The tablet resends the whole message after 1 s without `TEXT_ACK`, up to 3 times in total.
+  The PC remembers the last 32 completed ids per session and acks a repeat without typing it again.
 
 ## Coordinates and aspect ratio
 

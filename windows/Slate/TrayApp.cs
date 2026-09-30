@@ -33,7 +33,7 @@ internal sealed class TrayApp : ApplicationContext
 
         _options = new RouterOptions(new PixelRect(0, 0, 1, 1), BarrelMode.Disabled, 1.0);
         _router = new PenRouter(pen, () => _options);
-        _bridge = new Bridge(_router, () => _aspect, Environment.MachineName);
+        _bridge = new Bridge(_router, () => _aspect, Environment.MachineName, new KeyboardTyper());
         _bridge.StatusChanged += s => Post(() => OnStatus(s));
         UpdateTarget();
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;

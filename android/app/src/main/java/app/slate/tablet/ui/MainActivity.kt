@@ -71,6 +71,13 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.connect_ip).setOnClickListener { askForIp() }
 
         bindAreaScale()
+        bindSwitch(R.id.add_space, prefs.addSpaceAfterText) { prefs.addSpaceAfterText = it }
+        val keyField = findViewById<EditText>(R.id.api_key).apply { setText(prefs.apiKey) }
+        findViewById<Button>(R.id.api_key_save).setOnClickListener {
+            prefs.apiKey = keyField.text.toString()
+            val msg = if (prefs.apiKey.isEmpty()) R.string.api_key_cleared else R.string.api_key_saved
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
         bindSwitch(R.id.keep_screen_on, prefs.keepScreenOn) { prefs.keepScreenOn = it }
         bindSwitch(R.id.dark_canvas, prefs.darkCanvas) { prefs.darkCanvas = it }
         bindSwitch(R.id.show_outline, prefs.showOutline) { prefs.showOutline = it }

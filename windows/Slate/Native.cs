@@ -90,11 +90,27 @@ internal static class Native
         public IntPtr dwExtraInfo;
     }
 
+    public const uint INPUT_KEYBOARD = 1;
+    public const uint KEYEVENTF_KEYUP = 0x0002;
+    public const uint KEYEVENTF_UNICODE = 0x0004;
+    public const ushort VK_RETURN = 0x0D;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct KEYBDINPUT
+    {
+        public ushort wVk;
+        public ushort wScan;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
     [StructLayout(LayoutKind.Explicit, Size = 40)]
     public struct INPUT
     {
         [FieldOffset(0)] public uint type;
         [FieldOffset(8)] public MOUSEINPUT mi;
+        [FieldOffset(8)] public KEYBDINPUT ki;
     }
 
     [DllImport("user32.dll", SetLastError = true)]

@@ -12,6 +12,7 @@ import app.slate.tablet.protocol.Protocol
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 /**
  * The tablet's one connection to a PC, whichever transport it came in on. Owns the liveness rules
@@ -22,6 +23,8 @@ object SlateLink {
     private const val PING_EVERY_MS = 1000
     private const val REFRESH_PEN_MS = 250
     private const val PC_SILENT_MS = 5000
+    private const val TEXT_RETRY_MS = 1000
+    private const val TEXT_TRIES = 3
 
     enum class Phase { IDLE, CONNECTING, CONNECTED }
 
@@ -48,6 +51,14 @@ object SlateLink {
     private var lastPingMs = 0
     private var rttMs = -1
     private var started = false
+    private val pendingTexts = LinkedHashMap<Int, PendingText>()
+    private var nextTextId = Random.nextInt(0, 0x10000)
+
+    /** A TEXT message waiting for the PC's TEXT_ACK. */
+    private class PendingText(val packets: List<Packet>, val onDone: (String?) -> Unit) {
+        var sentMs = 0
+        var tries = 0
+    }
 
     @Volatile var status = Status()
         private set
@@ -124,6 +135,10 @@ object SlateLink {
                 }
                 if (ch.configured) publish(status.copy(rttMs = rtt))
             }
+            PacketType.TEXT_ACK -> {
+                val done = synchronized(lock) { pendingTexts.remove(p.textId) }
+                done?.let { main.post { it.onDone(null) } }
+            }
             PacketType.BYE -> {
                 val why = when (p.reason) {
                     ByeReason.BAD_CODE -> "Wrong pairing code. Check the code in Slate on the PC."
@@ -147,6 +162,7 @@ object SlateLink {
             }
         }
         ch.close()
+        if (wasCurrent) failPendingTexts("Disconnected from the PC before it typed the text.")
         if (wasCurrent) {
             Log.i(TAG, "Disconnected: $why")
             publish(Status(Phase.IDLE, message = why))
@@ -195,6 +211,7 @@ object SlateLink {
                     lastPenSentMs = now
                 }
                 if (ch.configured && now - lastPongMs > PC_SILENT_MS) silent = ch
+                resendTexts(ch, now)
             }
             silent?.let {
                 onChannelClosed(it, "The PC stopped answering.")
@@ -214,6 +231,61 @@ object SlateLink {
             val ch = current?.takeIf { it.configured } ?: return
             ch.send(Packet(PacketType.PING, lastRttMs = if (rttMs in 0 until Protocol.NO_RTT) rttMs else Protocol.NO_RTT))
         }
+    }
+
+    /**
+     * Sends text for the PC to type into its focused window. [onDone] runs on the main thread with
+     * null once the PC confirms, or an error message.
+     */
+    fun sendText(text: String, onDone: (error: String?) -> Unit) {
+        val chunks = Protocol.textChunks(text)
+        if (chunks.isEmpty()) {
+            main.post { onDone(null) }
+            return
+        }
+        synchronized(lock) {
+            val ch = current?.takeIf { it.configured }
+            if (ch == null) {
+                main.post { onDone("Not connected to a PC.") }
+                return
+            }
+            val id = nextTextId
+            nextTextId = (nextTextId + 1) and 0xFFFF
+            val packets = chunks.mapIndexed { i, c ->
+                Packet(PacketType.TEXT, textId = id, chunkIndex = i, chunkCount = chunks.size, chunk = c)
+            }
+            val pending = PendingText(packets, onDone)
+            pendingTexts[id] = pending
+            sendPendingText(ch, pending, nowMs())
+        }
+    }
+
+    // Guarded by lock.
+    private fun sendPendingText(ch: Channel, t: PendingText, now: Int) {
+        t.packets.forEach(ch::send)
+        t.sentMs = now
+        t.tries++
+    }
+
+    // Guarded by lock. The PC ignores repeats of a message it already typed, so resending is safe.
+    private fun resendTexts(ch: Channel, now: Int) {
+        if (!ch.configured) return
+        val it = pendingTexts.values.iterator()
+        while (it.hasNext()) {
+            val t = it.next()
+            if (now - t.sentMs < TEXT_RETRY_MS) continue
+            if (t.tries >= TEXT_TRIES) {
+                it.remove()
+                main.post { t.onDone("The PC didn't confirm the text. Check Slate is still running there.") }
+            } else {
+                sendPendingText(ch, t, now)
+            }
+        }
+    }
+
+    private fun failPendingTexts(why: String) {
+        val failed = synchronized(lock) { pendingTexts.values.toList().also { pendingTexts.clear() } }
+        failed.forEach { t -> main.post { t.onDone(why) } }
     }
 
     /** Builds a PEN packet; kept here so every sender uses the same flag rules. */

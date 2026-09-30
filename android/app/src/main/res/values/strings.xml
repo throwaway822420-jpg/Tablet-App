@@ -30,6 +30,25 @@
     <string name="pref_show_status">Show connection and latency</string>
     <string name="spen_note">Tip: if pressing the S Pen button opens Air command, turn it off in Settings › Advanced features › S Pen › Air command so the button reaches the PC.</string>
 
+    <string name="mode_write">Write</string>
+    <string name="mode_pen">Pen</string>
+    <string name="write_enter">Enter</string>
+    <string name="write_undo">Undo</string>
+    <string name="write_clear">Clear</string>
+    <string name="write_hint">Write here. Tap Enter to type it on the PC. The eraser end or the S Pen button erases.</string>
+    <string name="write_need_key">Add your Anthropic API key on Slate\'s main screen to turn writing into text.</string>
+    <string name="write_converting">Converting…</string>
+    <string name="write_typing">Typing: %1$s</string>
+    <string name="write_typed">Typed: %1$s (%2$d ms)</string>
+
+    <string name="write_header">Write mode (handwriting → text)</string>
+    <string name="write_help">On the drawing surface, tap Write on the right edge. Write sentences or equations; tap Enter and the PC types the text into whatever text field is selected. Equations come out as Unicode (x², √, π). Uses Claude Sonnet 5.5 through your own Anthropic API key from console.anthropic.com, billed to that account at roughly a third of a cent per conversion. The writing image goes to Anthropic.</string>
+    <string name="api_key_hint">Anthropic API key (sk-ant-…)</string>
+    <string name="api_key_save">Save key</string>
+    <string name="api_key_saved">API key saved.</string>
+    <string name="api_key_cleared">API key removed.</string>
+    <string name="pref_add_space">Add a space after each converted piece of text</string>
+
     <string name="status_idle">Not connected. Waiting for the PC over USB, or pick a PC below.</string>
     <string name="canvas_waiting">Waiting for the PC…</string>
     <string name="canvas_back_hint">Swipe in from an edge and go back to leave.</string>

@@ -18,11 +18,14 @@ public sealed class Bridge : IDisposable
     private readonly object _lock = new();
     private readonly Func<float> _aspect;
     private readonly Timer _watchdog;
+    private readonly ITextTyper? _typer;
+    private readonly TextAssembler _text = new();
     private object? _owner;
 
-    public Bridge(PenRouter router, Func<float> aspect, string pcName)
+    public Bridge(PenRouter router, Func<float> aspect, string pcName, ITextTyper? typer = null)
     {
         Router = router;
+        _typer = typer;
         _aspect = aspect;
         PcName = pcName;
         _watchdog = new Timer(_ =>
@@ -45,6 +48,7 @@ public sealed class Bridge : IDisposable
         lock (_lock)
         {
             if (_owner is not null && !ReferenceEquals(_owner, owner)) return false;
+            if (_owner is null) _text.Reset();
             _owner = owner;
             return true;
         }
@@ -83,10 +87,28 @@ public sealed class Bridge : IDisposable
                 reply(new Packet { Type = PacketType.Pong, EchoTimestamp = p.Timestamp });
                 if (p.LastRttMs != Protocol.NoRtt) onRtt?.Invoke(p.LastRttMs);
                 break;
+            case PacketType.Text:
+                HandleText(p, reply);
+                break;
             case PacketType.Bye:
                 return false;
         }
         return true;
+    }
+
+    private void HandleText(Packet p, Action<Packet> reply)
+    {
+        bool complete;
+        string? text;
+        lock (_text) (complete, text) = _text.Add(p);
+        if (!complete) return;
+        if (text is not null && _typer is not null)
+        {
+            Router.Release(); // keystrokes, not pen: make sure no stroke is in progress
+            Log.Info($"Typing {text.Length} characters from handwriting");
+            _typer.Type(text);
+        }
+        reply(new Packet { Type = PacketType.TextAck, TextId = p.TextId });
     }
 
     public void Dispose()

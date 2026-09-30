@@ -106,3 +106,36 @@ public class MappingTests
         Assert.Equal(new[] { new AdbDevice("R52T", "device"), new AdbDevice("X1", "unauthorized") }, list);
     }
 }
+
+public class TextAssemblerTests
+{
+    private static Packet Chunk(ushort id, byte index, byte count, string text) =>
+        new() { Type = PacketType.Text, TextId = id, ChunkIndex = index, ChunkCount = count, Chunk = text };
+
+    [Fact]
+    public void RoundTripsTextPackets()
+    {
+        var p = Chunk(513, 2, 3, "x²+ √2 ≤ π"); // exactly 16 UTF-8 bytes
+        Assert.Equal(p, Packet.Decode(p.Encode()));
+        var ack = new Packet { Type = PacketType.TextAck, TextId = 65535 };
+        Assert.Equal(ack, Packet.Decode(ack.Encode()));
+    }
+
+    [Fact]
+    public void AssemblesOutOfOrderAndTypesOnce()
+    {
+        var a = new TextAssembler();
+        Assert.Equal((false, (string?)null), a.Add(Chunk(7, 1, 2, "world")));
+        Assert.Equal((true, (string?)"hello world"), a.Add(Chunk(7, 0, 2, "hello ")));
+        // A resend after a lost ack completes again (so it can be re-acked) but isn't typed twice.
+        Assert.Equal((true, (string?)null), a.Add(Chunk(7, 0, 2, "hello ")));
+    }
+
+    [Fact]
+    public void IgnoresMalformedChunks()
+    {
+        var a = new TextAssembler();
+        Assert.Equal((false, (string?)null), a.Add(Chunk(1, 0, 0, "x")));
+        Assert.Equal((false, (string?)null), a.Add(Chunk(1, 3, 2, "x")));
+    }
+}

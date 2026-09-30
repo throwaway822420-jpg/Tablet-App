@@ -20,6 +20,34 @@ object Protocol {
     const val HELLO_NAME_BYTES = 14
     const val CONFIG_NAME_BYTES = 14
     const val DISCOVER_NAME_BYTES = 16
+    const val TEXT_CHUNK_BYTES = 16
+    const val MAX_TEXT_CHUNKS = 255
+
+    /**
+     * Splits text into TEXT chunks of at most 16 UTF-8 bytes, never inside a character.
+     * Text beyond 255 chunks (about 4 KB) is dropped.
+     */
+    fun textChunks(text: String): List<String> {
+        val chunks = ArrayList<String>()
+        val current = StringBuilder()
+        var bytes = 0
+        var i = 0
+        while (i < text.length && chunks.size < MAX_TEXT_CHUNKS) {
+            val cp = text.codePointAt(i)
+            val n = String(Character.toChars(cp)).toByteArray(Charsets.UTF_8).size
+            if (bytes + n > TEXT_CHUNK_BYTES) {
+                chunks.add(current.toString())
+                current.setLength(0)
+                bytes = 0
+                continue
+            }
+            current.appendCodePoint(cp)
+            bytes += n
+            i += Character.charCount(cp)
+        }
+        if (current.isNotEmpty() && chunks.size < MAX_TEXT_CHUNKS) chunks.add(current.toString())
+        return chunks
+    }
 }
 
 object PacketType {
@@ -31,6 +59,8 @@ object PacketType {
     const val PONG = 6
     const val DISCOVER = 7
     const val BYE = 8
+    const val TEXT = 9
+    const val TEXT_ACK = 10
 }
 
 object PenFlags {
@@ -87,6 +117,12 @@ data class Packet(
     val udpPort: Int = 0,
     // BYE
     val reason: Int = ByeReason.NORMAL,
+    // TEXT, TEXT_ACK
+    val textId: Int = 0,
+    // TEXT
+    val chunkIndex: Int = 0,
+    val chunkCount: Int = 0,
+    val chunk: String = "",
 ) {
     val contact: Boolean get() = flags and PenFlags.CONTACT != 0
     val inRange: Boolean get() = flags and (PenFlags.IN_RANGE or PenFlags.CONTACT) != 0
@@ -126,6 +162,13 @@ data class Packet(
                 putName(out, 12, Protocol.DISCOVER_NAME_BYTES, name)
             }
             PacketType.BYE -> b.put(8, reason.toByte())
+            PacketType.TEXT -> {
+                b.putShort(8, textId.toShort())
+                b.put(10, chunkIndex.toByte())
+                b.put(11, chunkCount.toByte())
+                putName(out, 12, Protocol.TEXT_CHUNK_BYTES, chunk)
+            }
+            PacketType.TEXT_ACK -> b.putShort(8, textId.toShort())
         }
         return out
     }
@@ -136,7 +179,7 @@ data class Packet(
             if (length < Protocol.PACKET_SIZE) return null
             val b = ByteBuffer.wrap(data, offset, Protocol.PACKET_SIZE).slice().order(ByteOrder.LITTLE_ENDIAN)
             val type = b.get(0).toInt() and 0xFF
-            if (type !in PacketType.HELLO..PacketType.BYE) return null
+            if (type !in PacketType.HELLO..PacketType.TEXT_ACK) return null
             val base = Packet(
                 type = type,
                 version = b.get(1).toInt() and 0xFF,
@@ -172,6 +215,13 @@ data class Packet(
                     name = getName(data, offset + 12, Protocol.DISCOVER_NAME_BYTES),
                 )
                 PacketType.BYE -> base.copy(reason = b.get(8).toInt() and 0xFF)
+                PacketType.TEXT -> base.copy(
+                    textId = u16(8),
+                    chunkIndex = b.get(10).toInt() and 0xFF,
+                    chunkCount = b.get(11).toInt() and 0xFF,
+                    chunk = getName(data, offset + 12, Protocol.TEXT_CHUNK_BYTES),
+                )
+                PacketType.TEXT_ACK -> base.copy(textId = u16(8))
                 else -> base
             }
         }

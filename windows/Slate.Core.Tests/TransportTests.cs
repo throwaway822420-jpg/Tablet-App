@@ -13,11 +13,18 @@ public class TransportTests
     private readonly RecordingInjector _inj = new();
     private readonly PenRouter _router;
     private readonly Bridge _bridge;
+    private readonly RecordingTyper _typer = new();
+
+    private sealed class RecordingTyper : ITextTyper
+    {
+        public List<string> Typed { get; } = new();
+        public void Type(string text) { lock (Typed) Typed.Add(text); }
+    }
 
     public TransportTests()
     {
         _router = new PenRouter(_inj, () => new RouterOptions(new PixelRect(0, 0, 1000, 500), BarrelMode.RightClick, 1.0));
-        _bridge = new Bridge(_router, () => 2f, "TESTPC");
+        _bridge = new Bridge(_router, () => 2f, "TESTPC", _typer);
     }
 
     private static PenSample Touch(float x) => new(PenTool.Pen, PenFlags.InRange | PenFlags.Contact, 512, x, 0.5f, 0, 0, 0);
@@ -64,6 +71,25 @@ public class TransportTests
             Assert.Equal(1234u, pong.EchoTimestamp);
 
             await s.WriteAsync(new Packet { Type = PacketType.Pen, Seq = 2, Pen = Touch(0.5f) }.Encode());
+            await Eventually(() => _router.IsDown);
+
+            // Handwriting result: two chunks, typed once, acked each time it's sent.
+            for (int round = 0; round < 2; round++)
+            {
+                await s.WriteAsync(new Packet { Type = PacketType.Text, TextId = 42, ChunkIndex = 0, ChunkCount = 2, Chunk = "E = mc² is " }.Encode());
+                await s.WriteAsync(new Packet { Type = PacketType.Text, TextId = 42, ChunkIndex = 1, ChunkCount = 2, Chunk = "famous" }.Encode());
+                // First round: one ack when the message completes. Resend: each chunk of a
+                // completed message is acked again, so two.
+                for (int acks = round == 0 ? 1 : 2; acks > 0; acks--)
+                {
+                    var ack = await ReadPacketAsync(s);
+                    Assert.Equal(PacketType.TextAck, ack.Type);
+                    Assert.Equal(42, ack.TextId);
+                }
+            }
+            Assert.Equal(new[] { "E = mc² is famous" }, _typer.Typed);
+            Assert.False(_router.IsDown); // typing lifted the pen first
+            await s.WriteAsync(new Packet { Type = PacketType.Pen, Seq = 3, Pen = Touch(0.5f) }.Encode());
             await Eventually(() => _router.IsDown);
 
             // Mapping change is pushed to the tablet.

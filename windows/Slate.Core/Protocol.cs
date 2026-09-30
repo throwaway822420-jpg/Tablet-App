@@ -15,6 +15,8 @@ public enum PacketType : byte
     Pong = 6,
     Discover = 7,
     Bye = 8,
+    Text = 9,
+    TextAck = 10,
 }
 
 public enum PenTool : byte
@@ -73,6 +75,8 @@ public static class Protocol
     public const int HelloNameBytes = 14;
     public const int ConfigNameBytes = 14;
     public const int DiscoverNameBytes = 16;
+    public const int TextChunkBytes = 16;
+    public const int MaxTextChunks = 255;
 
     /// <summary>True if <paramref name="seq"/> is newer than <paramref name="last"/>, allowing for wrap-around.</summary>
     public static bool IsNewer(uint seq, uint last) => unchecked((int)(seq - last)) > 0;
@@ -111,6 +115,14 @@ public sealed record Packet
 
     // BYE
     public ByeReason Reason { get; init; }
+
+    // TEXT, TEXT_ACK
+    public ushort TextId { get; init; }
+
+    // TEXT
+    public byte ChunkIndex { get; init; }
+    public byte ChunkCount { get; init; }
+    public string Chunk { get; init; } = "";
 
     public byte[] Encode()
     {
@@ -164,6 +176,15 @@ public sealed record Packet
             case PacketType.Bye:
                 b[8] = (byte)Reason;
                 break;
+            case PacketType.Text:
+                BinaryPrimitives.WriteUInt16LittleEndian(b[8..], TextId);
+                b[10] = ChunkIndex;
+                b[11] = ChunkCount;
+                WriteName(b.Slice(12, Protocol.TextChunkBytes), Chunk);
+                break;
+            case PacketType.TextAck:
+                BinaryPrimitives.WriteUInt16LittleEndian(b[8..], TextId);
+                break;
         }
     }
 
@@ -216,6 +237,14 @@ public sealed record Packet
                 Name = ReadName(b.Slice(12, Protocol.DiscoverNameBytes)),
             },
             PacketType.Bye => p with { Reason = (ByeReason)b[8] },
+            PacketType.Text => p with
+            {
+                TextId = BinaryPrimitives.ReadUInt16LittleEndian(b[8..]),
+                ChunkIndex = b[10],
+                ChunkCount = b[11],
+                Chunk = ReadName(b.Slice(12, Protocol.TextChunkBytes)),
+            },
+            PacketType.TextAck => p with { TextId = BinaryPrimitives.ReadUInt16LittleEndian(b[8..]) },
             _ => p,
         };
     }

@@ -27,6 +27,16 @@ class Prefs(context: Context) {
         get() = p.getFloat("area_scale", 1f)
         set(v) = p.edit().putFloat("area_scale", v).apply()
 
+    /** Anthropic API key for write mode (handwriting → text). Stored in app-private storage. */
+    var apiKey: String
+        get() = p.getString("api_key", "") ?: ""
+        set(v) = p.edit().putString("api_key", v.trim()).apply()
+
+    /** Add a space after each piece of converted text, so consecutive writes don't run together. */
+    var addSpaceAfterText: Boolean
+        get() = p.getBoolean("add_space", true)
+        set(v) = p.edit().putBoolean("add_space", v).apply()
+
     /** Last pairing code that worked for a PC name, so reconnecting doesn't ask again. */
     fun pairCode(pcName: String): Int? = p.getInt("code_$pcName", -1).takeIf { it in 0..9999 }
 
