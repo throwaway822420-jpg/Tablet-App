@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="katex.min.css">
+<script src="marked.js"></script>
+<script src="katex.min.js"></script>
+<script src="katex-auto-render.min.js"></script>
+<script src="mermaid.min.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  body { background: #181a1e; color: #e6e6e6; font: 17px/1.55 system-ui, sans-serif; margin: 0; padding: 8px 20px 60px; }
+  .entry { border-top: 1px solid #333; padding: 18px 0; }
+  .entry:first-child { border-top: none; }
+  .meta { color: #9aa; font-size: 13px; margin-bottom: 8px; }
+  .meta b { color: #7fd6a8; font-weight: 600; }
+  img.shot { max-width: 100%; max-height: 380px; border-radius: 8px; border: 1px solid #333; display: block; margin-bottom: 12px; }
+  .answer { background: #202329; border-radius: 10px; padding: 4px 16px; }
+  .answer pre { background: #111; padding: 10px; border-radius: 6px; overflow-x: auto; }
+  .answer code { font-family: ui-monospace, monospace; font-size: 15px; }
+  .answer table { border-collapse: collapse; } .answer td, .answer th { border: 1px solid #444; padding: 4px 8px; }
+  .pending { color: #9aa; font-style: italic; }
+  .error { color: #f08a80; }
+  .mermaid { background: #fff; border-radius: 8px; padding: 8px; }
+  a { color: #7fb8ff; }
+  .empty { color: #889; margin-top: 40px; }
+  @media print { body { background: #fff; color: #000; } .answer { background: #f6f6f6; } .meta b { color: #186; } }
+</style>
+</head>
+<body>
+<div id="out"></div>
+<script>
+  mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' });
+  marked.setOptions({ gfm: true, breaks: false });
+
+  // Keep maths away from the Markdown parser (so _ and * inside it survive), then let KaTeX render it.
+  function md(text) {
+    const maths = [];
+    const keep = s => { maths.push(s); return '\u0000M' + (maths.length - 1) + '\u0000'; };
+    let t = text.replace(/\$\$[\s\S]+?\$\$/g, keep).replace(/\\\[[\s\S]+?\\\]/g, keep)
+                .replace(/\\\([\s\S]+?\\\)/g, keep).replace(/(^|[^\\$])\$(?!\s)([^$\n]+?)\$/g, (m, pre, body) => pre + keep('$' + body + '$'));
+    let html = marked.parse(t);
+    return html.replace(/\u0000M(\d+)\u0000/g, (m, i) => maths[+i].replace(/&/g, '&amp;').replace(/</g, '&lt;'));
+  }
+
+  function esc(s) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
+
+  async function render(json) {
+    const entries = JSON.parse(json);
+    const out = document.getElementById('out');
+    if (!entries.length) { out.innerHTML = '<p class="empty">Pick a session on the left.</p>'; return; }
+    const atBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 40;
+    out.innerHTML = entries.map(e => {
+      let body;
+      if (e.state === 'error') body = '<p class="error">' + esc(e.status || 'Something went wrong.') + '</p>';
+      else if (e.state === 'pending' && !e.markdown) body = '<p class="pending">' + esc(e.status || 'Waiting for Claude…') + '</p>';
+      else body = md(e.markdown) + (e.state === 'pending' ? '<p class="pending">…</p>' : '');
+      const cost = e.cost > 0 ? ' · ~$' + e.cost.toFixed(3) : '';
+      return '<div class="entry" id="e-' + esc(e.id) + '"><div class="meta"><b>' + esc(e.label) + '</b> · ' + esc(e.time) + cost + '</div>' +
+             '<img class="shot" src="' + esc(e.image) + '" onerror="this.remove()">' +
+             '<div class="answer">' + body + '</div></div>';
+    }).join('');
+    renderMathInElement(out, {
+      delimiters: [{left: '$$', right: '$$', display: true}, {left: '\\[', right: '\\]', display: true},
+                   {left: '$', right: '$', display: false}, {left: '\\(', right: '\\)', display: false}],
+      throwOnError: false,
+    });
+    const blocks = out.querySelectorAll('code.language-mermaid');
+    blocks.forEach(code => { const d = document.createElement('div'); d.className = 'mermaid'; d.textContent = code.textContent; code.parentElement.replaceWith(d); });
+    if (blocks.length) { try { await mermaid.run({ querySelector: '.mermaid' }); } catch (err) { /* leave the source visible */ } }
+    if (atBottom) window.scrollTo(0, document.body.scrollHeight);
+  }
+</script>
+</body>
+</html>

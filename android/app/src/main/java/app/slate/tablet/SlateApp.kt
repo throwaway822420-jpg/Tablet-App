@@ -9,6 +9,7 @@ class SlateApp : Application() {
         super.onCreate()
         // Start listening for the PC over USB as soon as the app runs.
         Spend.init(this)
+        app.slate.tablet.study.StudyHub.init(this)
         SlateLink.start()
     }
 }

@@ -39,11 +39,45 @@ class MirrorPanel(
     private var active = false
     private var running = false
 
+    private var shotRequested = false
+    private val onShot: (JSONObject, ByteArray) -> Unit = { h, data ->
+        if (h.optString("t") == "shot" && shotRequested) {
+            shotRequested = false
+            android.graphics.BitmapFactory.decodeByteArray(data, 0, data.size)?.let { openAsk(it) } ?: askFromVideo()
+        }
+    }
+
+    /** Freeze the PC's screen at full resolution and open it for annotation. */
+    fun ask() {
+        if (!BulkLink.connected) return
+        shotRequested = true
+        showStatus("Capturing the screen…")
+        BulkLink.send(JSONObject().put("t", "shot"))
+        // If the PC doesn't answer quickly, use the current video frame instead.
+        postDelayed({ if (shotRequested) { shotRequested = false; askFromVideo() } }, 3000)
+    }
+
+    private fun askFromVideo() {
+        val v = mirror.viewport
+        mirror.viewport.reset(1f)
+        mirror.applyTransform()
+        val d = v.displayed()
+        val full = mirror.snapshot() ?: return showStatus("Couldn't capture the screen.")
+        val crop = android.graphics.Bitmap.createBitmap(full, d[0].toInt().coerceAtLeast(0), d[1].toInt().coerceAtLeast(0),
+            (d[2] - d[0]).toInt().coerceAtMost(full.width), (d[3] - d[1]).toInt().coerceAtMost(full.height))
+        openAsk(crop)
+    }
+
+    private fun openAsk(bitmap: android.graphics.Bitmap) {
+        if (running) status.visibility = View.GONE
+        val activity = context as? android.app.Activity ?: return
+        app.slate.tablet.study.AskActivity.start(activity, bitmap, app.slate.tablet.study.StudyHub.recentSession(tabletOnly = false))
+    }
+
     private val onJson: (JSONObject) -> Unit = { o ->
         when (o.optString("t")) {
             "stream" -> onStream(o)
             "cursor" -> mirror.onCursor(o.optDouble("x").toFloat(), o.optDouble("y").toFloat())
-            "welcome" -> if (active && !running) requestStream()
         }
     }
 
@@ -95,6 +129,7 @@ class MirrorPanel(
         applyPrefs()
         buildShortcuts()
         BulkLink.addJsonListener(onJson)
+        BulkLink.addBlobListener(onShot)
         BulkLink.addStateListener(onBulk)
         showStatus("Starting the screen stream…")
     }
@@ -106,6 +141,7 @@ class MirrorPanel(
         mirror.capture.release()
         BulkLink.send(JSONObject().put("t", "stream.stop"))
         BulkLink.removeJsonListener(onJson)
+        BulkLink.removeBlobListener(onShot)
         BulkLink.removeStateListener(onBulk)
     }
 

@@ -71,6 +71,12 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.connect_ip).setOnClickListener { askForIp() }
 
         bindAreaScale()
+        findViewById<Button>(R.id.study_history).setOnClickListener {
+            startActivity(Intent(this, app.slate.tablet.study.StudyActivity::class.java))
+        }
+        findViewById<Button>(R.id.study_ask_tablet).setOnClickListener {
+            startActivity(Intent(this, app.slate.tablet.study.CaptureActivity::class.java))
+        }
         val shortcutField = findViewById<EditText>(R.id.shortcuts).apply { setText(prefs.shortcuts) }
         findViewById<Button>(R.id.shortcuts_save).setOnClickListener {
             prefs.shortcuts = shortcutField.text.toString().ifBlank { Prefs.DEFAULT_SHORTCUTS }

@@ -176,6 +176,23 @@ internal static class Native
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool AttachConsole(int processId);
 
+    public const int SW_RESTORE = 9;
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetForegroundWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool ShowWindow(IntPtr hwnd, int cmd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsIconic(IntPtr hwnd);
+
     public const int ATTACH_PARENT_PROCESS = -1;
 
     public static void CheckLayouts()

@@ -116,6 +116,54 @@ Write mode turns handwriting into text on the tablet and sends it as a `TEXT` me
 - The tablet resends the whole message after 1 s without `TEXT_ACK`, up to 3 times in total.
   The PC remembers the last 32 completed ids per session and acks a repeat without typing it again.
 
+### Rich text in TEXT messages
+
+Private-use characters (never produced by handwriting) mark up a TEXT message:
+
+- `U+E000 mathml U+E004 unicode U+E001`: an equation. The PC pastes the MathML through the
+  clipboard (Word/PowerPoint turn it into a real equation) and types the Unicode if it can't.
+- A message starting with `U+E002`: set the PC clipboard to the rest instead of typing it,
+  optionally followed by `U+E003` and MathML (calculator answers).
+
+## Bulk channel (TCP 47813)
+
+Everything too big for 32-byte packets: screen video, screenshots, control messages, Claude replies.
+The PC listens; over USB the tablet reaches it through `adb reverse tcp:47813 tcp:47813` (loopback,
+no code needed), over Wi-Fi it connects to the PC's address and must present the pairing code.
+
+Frame: `u32 length` (of what follows) `| u8 kind | body`, little-endian.
+
+| Kind | Name | Body |
+|---:|---|---|
+| 1 | HELLO | tablet → PC first: JSON `{"code": pairing code or -1, "device": name}` |
+| 2 | JSON | a JSON object with a `"t"` (type) field |
+| 3 | VIDEO | PC → tablet: `u8 flags` (bit0 keyframe) `| i64 pts µs |` one H.264 Annex-B access unit |
+| 4 | BLOB | `u32 json length | JSON header | binary` (images) |
+
+JSON types:
+
+| `t` | Direction | Fields |
+|---|---|---|
+| `welcome` | PC → tablet | `pc`, `monitors: [{id, name, w, h, primary}]`, `current` |
+| `denied` | PC → tablet | wrong pairing code |
+| `stream.start` | tablet → PC | `monitor` (id or ""), `fps`, `usb`, optional `bitrate` |
+| `stream.stop` | tablet → PC | |
+| `stream` | PC → tablet | `state`: setup / starting / running / stopped / error, `message`, and when running `w, h, fps, encoder, monitor` |
+| `cursor` | PC → tablet | `x, y` (0..1 of the mirrored monitor) |
+| `mouse` | tablet → PC | `action`: move / down / up / click / dblclick / rightclick, `x, y` |
+| `scroll` | tablet → PC | `x, y`, `dx, dy` in wheel notches (fractions allowed; +dy scrolls down) |
+| `keys` | tablet → PC | `combo`, e.g. `Ctrl+Shift+Z`, `Alt+Tab`, `Win+D`, `F5` |
+| `touch` | tablet → PC | `contacts: [{id, x, y, phase: down/move/up}]` (Windows touch injection) |
+| `shot` | tablet → PC | request a full-resolution screenshot; answered with a `shot` BLOB `{w, h}` + JPEG |
+| `ask` (BLOB) | tablet → PC | `{askId, session, new, intent, title, images: [{name, size}]}` + the JPEGs back to back |
+| `ask.status` | PC → tablet | `askId`, `state` (thinking / error), `message`, `session` |
+| `ask.delta` | PC → tablet | `askId`, `text` (streamed reply) |
+| `ask.done` | PC → tablet | `askId`, `session`, `backend` (code / desktop), `title`, `markdown`, `cost` |
+| `ask.open` | tablet → PC | `session`: open it in the Claude apps |
+
+Video: no B-frames, a keyframe every second, an access unit delimiter before every frame. When the
+link falls behind, the PC drops delta frames until the next keyframe rather than queueing.
+
 ## Coordinates and aspect ratio
 
 The PC maps `x, y` onto its target rectangle (a monitor or a user-chosen

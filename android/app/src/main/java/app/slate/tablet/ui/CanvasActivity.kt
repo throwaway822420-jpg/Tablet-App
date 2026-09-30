@@ -42,7 +42,14 @@ class CanvasActivity : Activity() {
             this, PcTarget(this) { prefs.addSpaceAfterText }, prefs.panelSettings(), vertical = true,
             extraButtons = listOf(tab(R.string.mode_pen, Mode.PEN), tab(R.string.mode_screen, Mode.SCREEN)),
         )
-        mirror = MirrorPanel(this, prefs, extraButtons = listOf(tab(R.string.mode_pen, Mode.PEN), tab(R.string.mode_write, Mode.WRITE)))
+        mirror = MirrorPanel(
+            this, prefs,
+            extraButtons = listOf(tab(R.string.mode_pen, Mode.PEN), tab(R.string.mode_write, Mode.WRITE)),
+            toolButtons = listOf(
+                WritePanel.makeButton(this, "Ask", accent = true) { mirror.ask() },
+                WritePanel.makeButton(this, "History") { startActivity(android.content.Intent(this, app.slate.tablet.study.StudyActivity::class.java)) },
+            ),
+        )
         // Pen mode: tabs on the middle of the right edge switch to writing or the PC's screen.
         penTabs = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL

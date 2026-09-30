@@ -14,6 +14,14 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _aspect = new() { Text = "Keep aspect ratio (tablet shows the active area)", AutoSize = true };
     private readonly ComboBox _barrel = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 320 };
     private readonly ComboBox _newlines = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 320 };
+    private readonly ComboBox _askBackend = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 320 };
+    private readonly TextBox _newChat = new() { Width = 160 };
+
+    private static readonly (AskBackend Backend, string Text)[] AskChoices =
+    {
+        (AskBackend.ClaudeCode, "Claude Code session (answers come back to the tablet)"),
+        (AskBackend.ClaudeDesktop, "Claude Desktop app (a normal chat in the app)"),
+    };
     private readonly TrackBar _pressure = new() { Minimum = 0, Maximum = 20, TickFrequency = 5, Width = 240 };
     private readonly CurvePreview _curve = new() { Size = new Size(64, 64) };
     private readonly CheckBox _usbEnabled = new() { Text = "USB (lowest latency; needs USB debugging)", AutoSize = true };
@@ -73,6 +81,13 @@ internal sealed class SettingsForm : Form
             Button("New code", (_, _) => { _app.NewPairCode(); LoadValues(); }));
         var adbRow = Row(Button("Choose adb…", (_, _) => ChooseAdb()),
             Button("Find automatically", (_, _) => { _app.Settings.AdbPath = null; Changed(); }));
+        _askBackend.Items.AddRange(AskChoices.Select(c => (object)c.Text).ToArray());
+        root.Controls.Add(Group("Ask Claude about the screen",
+            new Label { Text = "Send questions to:", AutoSize = true }, _askBackend,
+            Row(new Label { Text = "Claude Desktop's new-chat shortcut:", AutoSize = true, Anchor = AnchorStyles.Left }, _newChat),
+            Wrapping("Claude Code: install it and run `claude` once to sign in. \"Open in Claude\" on the tablet opens the session with Remote Control, " +
+                     "so it also appears at claude.ai/code and in the Claude app; in Claude Desktop, use /resume in the Code tab.")));
+
         root.Controls.Add(Group("Connections", _usbEnabled, _wifiEnabled, codeRow, _adb, adbRow));
 
         root.Controls.Add(Group("First time?", Wrapping(
@@ -95,6 +110,19 @@ internal sealed class SettingsForm : Form
             Changed();
         };
         _aspect.CheckedChanged += (_, _) => { if (!_loading) { _app.Settings.PreserveAspect = _aspect.Checked; Changed(); } };
+        _askBackend.SelectedIndexChanged += (_, _) =>
+        {
+            if (_loading || _askBackend.SelectedIndex < 0) return;
+            _app.Settings.AskBackend = AskChoices[_askBackend.SelectedIndex].Backend;
+            Changed();
+        };
+        _newChat.Leave += (_, _) =>
+        {
+            if (_loading) return;
+            if (KeyCombo.Parse(_newChat.Text) is null) { _newChat.Text = _app.Settings.DesktopNewChatShortcut; return; }
+            _app.Settings.DesktopNewChatShortcut = _newChat.Text.Trim();
+            Changed();
+        };
         _newlines.SelectedIndexChanged += (_, _) =>
         {
             if (_loading || _newlines.SelectedIndex < 0) return;
@@ -149,6 +177,8 @@ internal sealed class SettingsForm : Form
         _aspect.Checked = s.PreserveAspect;
         _barrel.SelectedIndex = Array.FindIndex(BarrelChoices, c => c.Mode == s.BarrelMode);
         _newlines.SelectedIndex = Array.FindIndex(NewlineChoices, c => c.Mode == s.NewlineMode);
+        _askBackend.SelectedIndex = Array.FindIndex(AskChoices, c => c.Backend == s.AskBackend);
+        _newChat.Text = s.DesktopNewChatShortcut;
         _pressure.Value = GammaToSlider(s.PressureGamma);
         _curve.Gamma = s.PressureGamma;
         _usbEnabled.Checked = s.UsbEnabled;

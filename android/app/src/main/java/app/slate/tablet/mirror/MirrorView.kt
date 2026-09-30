@@ -59,6 +59,9 @@ class MirrorView(context: Context) : FrameLayout(context), TextureView.SurfaceTe
         isFocusableInTouchMode = true
     }
 
+    /** The current picture as shown (for freezing when the PC can't send a screenshot). */
+    fun snapshot(): android.graphics.Bitmap? = texture.bitmap
+
     fun displayedRect(): RectF = viewport.displayed().let { RectF(it[0], it[1], it[2], it[3]) }
 
     // --- Surface / transform ---

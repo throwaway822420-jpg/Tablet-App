@@ -19,7 +19,7 @@ This is a pen-input bridge, not a screen mirror. No video goes to the tablet.
 | Folder | What |
 |---|---|
 | [`protocol/PROTOCOL.md`](protocol/PROTOCOL.md) | The wire format: 32-byte little-endian packets. Single source of truth. |
-| `android/` | Kotlin app, min SDK 29. Only dependency: the Anthropic Java SDK, for write mode. |
+| `android/` | Kotlin app, min SDK 29. Dependency: the Anthropic Java SDK; bundled marked, KaTeX and Mermaid render answers. |
 | `windows/Slate.Core/` | Portable .NET 8 library: protocol, pen state machine, mapping, USB and Wi-Fi transports. Tested on any OS. |
 | `windows/Slate/` | The WinForms tray app: synthetic pen injection, settings window, region picker. |
 | `windows/Slate.Core.Tests/` | xUnit tests, including end-to-end USB/Wi-Fi sessions over real sockets with a fake tablet. |
@@ -84,11 +84,60 @@ held S Pen button erases whole strokes.
 - The PC types with Unicode keystrokes, so any character works regardless of keyboard layout.
   Windows doesn't let it type into apps running as administrator unless Slate does too.
 
+## Output modes and the calculator
+
+The x² button on the writing surface cycles how maths is written out:
+**Unicode** (`dy/dx`, `x²`, works anywhere), **Equation** (maths pasted as real equations via MathML,
+for Word/PowerPoint/OneNote; prose still typed; your clipboard is restored) and **LaTeX**
+(`$\frac{dy}{dx}$`, for Overleaf/Notion/Obsidian). Line breaks are typed as Shift+Enter by default
+so chat apps don't send half a message (PC setting "Line breaks in handwriting typed as").
+
+**Calc** switches the surface to a calculator: write a calculation and tap **=**. Claude Opus 5.5
+reads and solves it (algebra and calculus too, with the key steps); plain arithmetic is re-checked
+by the tablet's own evaluator. The answer is copied to the tablet and PC clipboards in the current
+output mode; **Type it** types it instead.
+
+## Slate Keyboard
+
+A system keyboard for the tablet itself: write in any app's text field and tap Enter. Turn it on
+once from Slate's main screen (Settings › Keyboard list), then switch keyboards with the
+navigation-bar keyboard button. Works without a PC.
+
+## Screen mode (mirroring and navigation)
+
+**Screen** on the drawing surface shows the PC's screen on the tablet, like a second display:
+
+- H.264 video over the same USB/Wi-Fi link. The PC downloads ffmpeg once (~115 MB) and uses DXGI
+  capture plus the fastest encoder that works (NVIDIA, AMD, Intel, Windows Media Foundation, or x264).
+- The S Pen is a real pen right on the picture, at any zoom. Fingers navigate: tap = click, hold =
+  right-click, drag = drag, two fingers = scroll or pinch-zoom the view, three-finger swipes =
+  switch apps / task view / desktop. Or switch fingers to real Windows touch in ⋯ View.
+- ⋯ View: fit, shrink, zoom, actual pixels, follow the cursor when zoomed, mini-map, monitor and
+  quality. Shortcut buttons down the left edge are editable on the main screen.
+
+## Ask Claude about the screen
+
+In Screen mode tap **Ask**: the PC's screen freezes at full resolution. Circle or highlight things,
+write your question, then tap **Ask**, **Explain**, **Step by step**, **Just a hint**,
+**Check my working** or **Quiz me**. Whatever you circled is also sent as a zoomed crop.
+
+- **Claude Code session** (PC setting, default): each question is a turn in a Claude Code session on
+  the PC, streamed back to the tablet. **Open in Claude** opens the session with Remote Control, so
+  it's also at claude.ai/code and in the Claude app, and Claude Desktop can pick it up with /resume.
+  Needs Claude Code installed and signed in on the PC.
+- **Claude Desktop app**: the question is pasted into Claude Desktop as a normal chat (the app pops
+  up the first time, then stays in the background); replies stay in the app.
+- **History** keeps every question and answer on the tablet, rendered with maths and diagrams, with
+  handwritten **Follow up**, **Export PDF** and **Share Markdown**.
+- **The tablet's own screen**: the "Ask Claude" Quick Settings tile (or sharing a screenshot to Slate)
+  asks about whatever is on the tablet. Without a PC these go to Claude Opus 5.5 with your API key.
+- The main screen shows this month's approximate API spend.
+
 ## Tests
 
 ```sh
-cd windows && dotnet test                 # 46 tests: protocol, state machine, mapping, transports, text
-cd android && ./gradlew testDebugUnitTest # 31 tests: protocol, tilt, area layout, ink, text chunks, Unicode maths, API request shape
+cd windows && dotnet test                 # 71 tests, incl. video pipeline with real ffmpeg and a fake Claude Code
+cd android && ./gradlew testDebugUnitTest # 55 tests: protocol, H.264/SPS, viewport, transcripts, calculator, study store
 ```
 
 Both suites check the same golden packet from `PROTOCOL.md`, so the two ends can't drift apart.

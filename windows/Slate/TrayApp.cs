@@ -24,6 +24,7 @@ internal sealed class TrayApp : ApplicationContext
     private WifiTransport? _wifi;
     private BulkServer? _bulk;
     private MirrorService? _mirror;
+    private AskService? _ask;
     private string _mirrorStatus = "";
     private SettingsForm? _form;
     private LinkState _overall = LinkState.Off;
@@ -107,6 +108,7 @@ internal sealed class TrayApp : ApplicationContext
         }
         _mirror = new MirrorService(_bulk, Settings, () => Settings.Save(Program.SettingsPath));
         _mirror.MirrorChanged += () => Post(UpdateTarget);
+        _ask = new AskService(_bulk, _mirror, Settings, RunOnUi);
         _mirror.StatusChanged += s => Post(() =>
         {
             _mirrorStatus = s;

@@ -38,6 +38,15 @@ public sealed class SlateSettings
     /// <summary>Explicit path to ffmpeg; null = next to Slate, the one Slate downloaded, or PATH.</summary>
     public string? FfmpegPath { get; set; }
 
+    /// <summary>Where "ask about the screen" questions go.</summary>
+    public AskBackend AskBackend { get; set; } = AskBackend.ClaudeCode;
+
+    /// <summary>Claude Desktop's "new chat" shortcut, used when a tablet question starts a new session.</summary>
+    public string DesktopNewChatShortcut { get; set; } = "Ctrl+Shift+O";
+
+    /// <summary>Explicit path to the Claude Code CLI; null = PATH and the default install location.</summary>
+    public string? ClaudeCliPath { get; set; }
+
     /// <summary>Explicit path to adb; null = search next to Slate, PATH and the Android SDK.</summary>
     public string? AdbPath { get; set; }
 

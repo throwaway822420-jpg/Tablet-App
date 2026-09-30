@@ -55,6 +55,14 @@
     <string name="shortcuts_save">Save shortcuts</string>
     <string name="shortcuts_saved">Shortcuts saved.</string>
 
+    <string name="ask_label">Ask Claude</string>
+    <string name="history_label">Study history</string>
+    <string name="ask_tile">Ask Claude</string>
+    <string name="study_header">Ask Claude about the screen</string>
+    <string name="study_help">In Screen mode tap Ask: the PC\'s screen freezes so you can circle or highlight things and write your question, then tap Explain, Step by step, Just a hint, Check my working or Quiz me (or Ask). With the PC connected, questions go to a Claude Code session or the Claude Desktop app (chosen in Slate\'s PC settings), which you can open in the Claude apps. For the tablet\'s own screen, add the "Ask Claude" tile to Quick Settings, or share a screenshot to Slate; without a PC these are answered by Claude Opus 5.5 with your API key.</string>
+    <string name="study_history">Study history</string>
+    <string name="study_ask_tablet">Ask about the tablet screen</string>
+
     <string name="status_idle">Not connected. Waiting for the PC over USB, or pick a PC below.</string>
     <string name="canvas_waiting">Waiting for the PC…</string>
     <string name="canvas_back_hint">Swipe in from an edge and go back to leave.</string>

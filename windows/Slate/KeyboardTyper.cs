@@ -85,46 +85,9 @@ internal sealed class KeyboardTyper(Func<NewlineMode> newlines, Action<Action> o
         return TrySetDataObject(data);
     }
 
-    private static bool TrySetDataObject(DataObject data)
-    {
-        try
-        {
-            Clipboard.SetDataObject(data, copy: true, retryTimes: 5, retryDelay: 50);
-            return true;
-        }
-        catch (Exception ex) when (ex is ExternalException or ThreadStateException)
-        {
-            Log.Info($"Couldn't set the clipboard: {ex.Message}");
-            return false;
-        }
-    }
+    private static bool TrySetDataObject(DataObject data) => ClipboardTools.Restore(data);
 
-    /// <summary>Copies whatever formats the current clipboard can give, to put back later.</summary>
-    private static DataObject SnapshotClipboard()
-    {
-        var copy = new DataObject();
-        try
-        {
-            var current = Clipboard.GetDataObject();
-            if (current is null) return copy;
-            foreach (var format in current.GetFormats(autoConvert: false))
-            {
-                try
-                {
-                    var value = current.GetData(format, autoConvert: false);
-                    if (value is not null) copy.SetData(format, value);
-                }
-                catch (Exception ex) when (ex is ExternalException or COMException or OutOfMemoryException or NotSupportedException or InvalidOperationException)
-                {
-                    // Some formats (delay-rendered, private) can't be copied; skip them.
-                }
-            }
-        }
-        catch (ExternalException)
-        {
-        }
-        return copy;
-    }
+    private static DataObject SnapshotClipboard() => ClipboardTools.Snapshot();
 
     private static Native.INPUT ToInput(KeyStroke k) => new()
     {
