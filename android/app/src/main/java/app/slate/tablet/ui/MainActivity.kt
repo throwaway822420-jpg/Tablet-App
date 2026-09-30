@@ -89,6 +89,16 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.ime_pick).setOnClickListener {
             getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.showInputMethodPicker()
         }
+        findViewById<Button>(R.id.ime_switch_button).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.ime_switch_button)
+                .setMessage(R.string.ime_switch_help)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
         bindSwitch(R.id.add_space, prefs.addSpaceAfterText) { prefs.addSpaceAfterText = it }
         val keyField = findViewById<EditText>(R.id.api_key).apply { setText(prefs.apiKey) }
         findViewById<Button>(R.id.api_key_save).setOnClickListener {

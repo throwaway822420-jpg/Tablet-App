@@ -100,8 +100,13 @@ output mode; **Type it** types it instead.
 ## Slate Keyboard
 
 A system keyboard for the tablet itself: write in any app's text field and tap Enter. Turn it on
-once from Slate's main screen (Settings › Keyboard list), then switch keyboards with the
-navigation-bar keyboard button. Works without a PC.
+once from Slate's main screen (Settings › Keyboard list). Works without a PC.
+
+To get to it from Samsung Keyboard (or any other), turn on the **Slate keyboard button**
+accessibility service (main screen › Slate Keyboard › 3): a small **✎ Slate** button then sits
+just above any other keyboard while it's open, and one tap switches to Slate Keyboard (Android 11+).
+It only looks at where the keyboard window is and which keyboard it is. ⌨ on Slate Keyboard
+switches back. On a sideloaded APK, Android may first need *App info › ⋮ › Allow restricted settings*.
 
 ## Screen mode (mirroring and navigation)
 

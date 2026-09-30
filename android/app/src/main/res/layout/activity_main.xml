@@ -255,6 +255,13 @@
                 android:text="@string/ime_pick" />
         </LinearLayout>
 
+        <Button
+            android:id="@+id/ime_switch_button"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/ime_switch_button" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

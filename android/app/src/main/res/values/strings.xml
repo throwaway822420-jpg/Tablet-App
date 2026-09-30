@@ -45,9 +45,14 @@
     <string name="spend_label">API spend this month: about $%1$.2f (%2$d requests). Handwriting ≈ 0.3¢, calculator ≈ 1–3¢ each.</string>
     <string name="ime_name">Slate Keyboard (handwriting)</string>
     <string name="ime_header">Slate Keyboard</string>
-    <string name="ime_help">Handwriting in any app on this tablet: write with the S Pen and tap Enter to put the text in the selected field. Turn it on once, then switch keyboards with the keyboard button in the navigation bar (or ⌨ on Slate Keyboard to go back).</string>
+    <string name="ime_help">Handwriting in any app on this tablet: write with the S Pen and tap Enter to put the text in the selected field. Turn it on once. Step 3 adds a "✎ Slate" button above Samsung Keyboard (or any other keyboard) that switches to Slate Keyboard in one tap; ⌨ on Slate Keyboard goes back.</string>
     <string name="ime_enable">1. Turn on Slate Keyboard</string>
     <string name="ime_pick">2. Switch keyboard</string>
+    <string name="ime_switch_button">3. Add the ✎ Slate button</string>
+    <string name="ime_switch_help">In the list that opens, tap Installed apps › Slate keyboard button › On. If Android says it\'s a restricted setting: Settings › Apps › Slate › ⋮ (top right) › Allow restricted settings, then try again.</string>
+    <string name="switch_service_name">Slate keyboard button</string>
+    <string name="switch_service_summary">Shows a ✎ Slate button above other keyboards to switch to Slate Keyboard.</string>
+    <string name="switch_service_description">Shows a small ✎ Slate button just above Samsung Keyboard or any other keyboard while it is open. Tap it to switch to Slate Keyboard. Slate only looks at where the keyboard is on screen and which keyboard it is; it doesn\'t read what is on screen or what you type.</string>
 
     <string name="screen_header">Screen mode (the PC\'s screen on the tablet)</string>
     <string name="screen_help">On the drawing surface, tap Screen. The S Pen works as a pen right on the picture. Fingers: tap = click, hold = right-click, drag = drag, two fingers = scroll (or pinch to zoom the view), three-finger swipe left/right = switch apps, up = task view, down = desktop. ⋯ View has fit / shrink / zoom, real Windows touch, follow-the-cursor, monitor and quality. The first time, the PC downloads a video encoder (about 115 MB). Shortcut buttons down the left edge, one Label=Keys per line:</string>
