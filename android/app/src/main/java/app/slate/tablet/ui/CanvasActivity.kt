@@ -39,6 +39,7 @@ class CanvasActivity : Activity() {
     override fun onResume() {
         super.onResume()
         immersive()
+        view.refreshArea()
         view.requestFocus()
     }
 

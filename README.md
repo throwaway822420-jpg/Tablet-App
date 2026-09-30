@@ -107,6 +107,11 @@ without the hardware; the rest needs a Windows PC and the tablet.
   lifted straight out of range, so leaving range is decided after a 100–150 ms quiet period.
 - **Mapping:** with *Keep aspect ratio* on, the PC sends the target's width/height ratio and the
   tablet letterboxes and outlines the active area to match.
+- **Changing the movement ratio:** mapping is always absolute, like a Wacom (a spot on the tablet
+  is always the same spot on the screen). To change how far the hand moves per screen distance,
+  shrink one side: *Tablet area* on the tablet (25–100%, centred) means less hand movement; a
+  screen *region* on the PC means more hand movement and finer detail. A stroke only draws if it
+  starts inside the tablet area.
 - **Security:** USB needs adb authorization. Wi-Fi uses a 4-digit code on the LAN and isn't
   encrypted, so keep it to networks you trust.
 

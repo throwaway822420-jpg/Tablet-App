@@ -87,6 +87,25 @@
             style="@style/SectionHeader"
             android:text="@string/canvas_header" />
 
+        <TextView
+            android:id="@+id/area_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <SeekBar
+            android:id="@+id/area_scale"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:max="75" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:text="@string/area_help"
+            android:textAppearance="@android:style/TextAppearance.DeviceDefault.Small" />
+
         <Switch
             android:id="@+id/keep_screen_on"
             style="@style/SettingSwitch"

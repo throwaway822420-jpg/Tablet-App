@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.view.MotionEvent
 import android.view.View
 import app.slate.tablet.R
+import app.slate.tablet.input.AreaLayout
 import app.slate.tablet.input.PenCapture
 import app.slate.tablet.link.SlateLink
 
@@ -54,18 +55,15 @@ class CanvasView(context: Context, private val prefs: Prefs) : View(context) {
         systemGestureExclusionRects = listOf(Rect(0, 0, w, h))
     }
 
+    /** Re-reads the area size setting, e.g. after coming back from the settings screen. */
+    fun refreshArea() {
+        layoutArea()
+        invalidate()
+    }
+
     private fun layoutArea() {
-        val w = width.toFloat()
-        val h = height.toFloat()
-        val aspect = status.aspect
-        if (aspect <= 0f || w <= 0f || h <= 0f) {
-            activeArea.set(0f, 0f, w, h)
-            return
-        }
-        val (aw, ah) = if (w / h > aspect) h * aspect to h else w to w / aspect
-        val left = (w - aw) / 2f
-        val top = (h - ah) / 2f
-        activeArea.set(left, top, left + aw, top + ah)
+        val b = AreaLayout.bounds(width.toFloat(), height.toFloat(), status.aspect, prefs.areaScale)
+        activeArea.set(b[0], b[1], b[2], b[3])
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -74,7 +72,7 @@ class CanvasView(context: Context, private val prefs: Prefs) : View(context) {
         val fg = if (dark) Color.rgb(170, 170, 170) else Color.rgb(90, 90, 90)
         canvas.drawColor(bg)
 
-        if (prefs.showOutline && status.aspect > 0f) {
+        if (prefs.showOutline && (status.aspect > 0f || prefs.areaScale < 1f)) {
             // Dim the letterbox bands so the live area is obvious.
             maskPaint.color = if (dark) Color.rgb(8, 8, 8) else Color.rgb(225, 225, 225)
             canvas.drawRect(0f, 0f, width.toFloat(), activeArea.top, maskPaint)

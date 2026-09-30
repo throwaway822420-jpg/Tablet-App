@@ -30,6 +30,10 @@ class PenCapture(private val view: View, private val activeArea: () -> RectF) {
     private val tiltSupport = HashMap<Int, Boolean>()
     private var last: Packet? = null
 
+    // A stroke only draws if the pen touched down inside the active area, like the edge of a real
+    // tablet's sensor. Once down it keeps drawing (clamped at the edge) so strokes don't break.
+    private var strokeInside = false
+
     // Android sends HOVER_EXIT just before ACTION_DOWN and nothing at all when the pen is lifted out
     // of range from a touch, so "left range" is only decided after a short quiet period.
     private val leave = Runnable { leaveNow() }
@@ -38,18 +42,8 @@ class PenCapture(private val view: View, private val activeArea: () -> RectF) {
         val idx = stylusIndex(e)
         if (idx < 0) return true
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                view.requestUnbufferedDispatch(e)
-                handler.removeCallbacks(leave)
-                emitAll(e, idx, contact = true)
-            }
-            MotionEvent.ACTION_POINTER_DOWN -> {
-                if (e.actionIndex == idx) {
-                    view.requestUnbufferedDispatch(e)
-                    handler.removeCallbacks(leave)
-                }
-                emitAll(e, idx, contact = true)
-            }
+            MotionEvent.ACTION_DOWN -> penDown(e, idx)
+            MotionEvent.ACTION_POINTER_DOWN -> if (e.actionIndex == idx) penDown(e, idx) else emitAll(e, idx, contact = true)
             MotionEvent.ACTION_MOVE,
             MotionEvent.ACTION_BUTTON_PRESS,
             MotionEvent.ACTION_BUTTON_RELEASE -> emitAll(e, idx, contact = true)
@@ -80,12 +74,21 @@ class PenCapture(private val view: View, private val activeArea: () -> RectF) {
     /** Lift the pen and take it out of range, e.g. when the canvas loses focus. */
     fun release() {
         handler.removeCallbacks(leave)
+        strokeInside = false
         last?.let { if (it.contact) send(it.copy(flags = it.flags and PenFlags.CONTACT.inv(), pressure = 0)) }
         leaveNow()
     }
 
+    private fun penDown(e: MotionEvent, idx: Int) {
+        view.requestUnbufferedDispatch(e)
+        handler.removeCallbacks(leave)
+        strokeInside = activeArea().contains(e.getX(idx), e.getY(idx))
+        emitAll(e, idx, contact = true)
+    }
+
     private fun lift(e: MotionEvent, idx: Int) {
-        emit(e, idx, -1, contact = false)
+        strokeInside = false
+        emit(e, idx, -1, touching = false)
         handler.removeCallbacks(leave)
         handler.postDelayed(leave, LIFT_GRACE_MS)
     }
@@ -96,7 +99,8 @@ class PenCapture(private val view: View, private val activeArea: () -> RectF) {
     }
 
     /** [h] is a history index, or -1 for the current sample. */
-    private fun emit(e: MotionEvent, idx: Int, h: Int, contact: Boolean) {
+    private fun emit(e: MotionEvent, idx: Int, h: Int, touching: Boolean) {
+        val contact = touching && strokeInside
         fun axis(a: Int) = if (h < 0) e.getAxisValue(a, idx) else e.getHistoricalAxisValue(a, idx, h)
         val x = if (h < 0) e.getX(idx) else e.getHistoricalX(idx, h)
         val y = if (h < 0) e.getY(idx) else e.getHistoricalY(idx, h)

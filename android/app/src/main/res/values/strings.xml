@@ -22,6 +22,8 @@
     <string name="bad_ip">That isn\'t an IP address.</string>
 
     <string name="canvas_header">Drawing surface</string>
+    <string name="area_label">Tablet area: %1$d%%</string>
+    <string name="area_help">Smaller means less hand movement for the same distance on the PC screen: only the middle of the tablet is used. To go the other way (more hand movement, finer detail), choose a smaller region of the screen in the PC settings instead.</string>
     <string name="pref_keep_screen_on">Keep screen on</string>
     <string name="pref_dark_canvas">Dark surface</string>
     <string name="pref_show_outline">Show the active area</string>

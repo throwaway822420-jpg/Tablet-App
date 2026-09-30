@@ -22,6 +22,11 @@ class Prefs(context: Context) {
         get() = p.getBoolean("show_status", true)
         set(v) = p.edit().putBoolean("show_status", v).apply()
 
+    /** Share of the tablet used as the active area (1 = as large as fits). Smaller = less hand movement. */
+    var areaScale: Float
+        get() = p.getFloat("area_scale", 1f)
+        set(v) = p.edit().putFloat("area_scale", v).apply()
+
     /** Last pairing code that worked for a PC name, so reconnecting doesn't ask again. */
     fun pairCode(pcName: String): Int? = p.getInt("code_$pcName", -1).takeIf { it in 0..9999 }
 

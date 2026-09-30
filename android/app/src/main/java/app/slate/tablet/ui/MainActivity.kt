@@ -9,6 +9,7 @@ import android.text.InputType
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -21,6 +22,7 @@ import app.slate.tablet.link.WifiLink
 import app.slate.tablet.protocol.Protocol
 import java.net.InetAddress
 import kotlin.concurrent.thread
+import kotlin.math.roundToInt
 
 /** Setup screen: connection status, Wi-Fi PC list, and drawing-surface options. */
 class MainActivity : Activity() {
@@ -68,6 +70,7 @@ class MainActivity : Activity() {
         disconnect.setOnClickListener { SlateLink.disconnect() }
         findViewById<Button>(R.id.connect_ip).setOnClickListener { askForIp() }
 
+        bindAreaScale()
         bindSwitch(R.id.keep_screen_on, prefs.keepScreenOn) { prefs.keepScreenOn = it }
         bindSwitch(R.id.dark_canvas, prefs.darkCanvas) { prefs.darkCanvas = it }
         bindSwitch(R.id.show_outline, prefs.showOutline) { prefs.showOutline = it }
@@ -98,6 +101,24 @@ class MainActivity : Activity() {
         discovery.stop()
         SlateLink.removeListener(onStatus)
         super.onStop()
+    }
+
+    // Slider 0..75 ↔ area 25..100%.
+    private fun bindAreaScale() {
+        val label = findViewById<TextView>(R.id.area_label)
+        val bar = findViewById<SeekBar>(R.id.area_scale)
+        fun show(percent: Int) { label.text = getString(R.string.area_label, percent) }
+        val percent = (prefs.areaScale * 100).roundToInt().coerceIn(25, 100)
+        bar.progress = percent - 25
+        show(percent)
+        bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
+                show(progress + 25)
+                if (fromUser) prefs.areaScale = (progress + 25) / 100f
+            }
+            override fun onStartTrackingTouch(sb: SeekBar) {}
+            override fun onStopTrackingTouch(sb: SeekBar) {}
+        })
     }
 
     private fun bindSwitch(id: Int, value: Boolean, save: (Boolean) -> Unit) {
