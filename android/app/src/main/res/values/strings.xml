@@ -65,7 +65,7 @@
     <string name="history_label">Study history</string>
     <string name="ask_tile">Ask Claude</string>
     <string name="study_header">Ask Claude about the screen</string>
-    <string name="study_help">In Screen mode tap Ask: the PC\'s screen freezes so you can circle or highlight things and write your question, then tap Explain, Step by step, Just a hint, Check my working or Quiz me (or Ask). With the PC connected, questions go to a Claude Code session or the Claude Desktop app (chosen in Slate\'s PC settings), which you can open in the Claude apps. For the tablet\'s own screen, add the "Ask Claude" tile to Quick Settings, or share a screenshot to Slate; without a PC these are answered by Claude Opus 5.5 with your API key.</string>
+    <string name="study_help">In Screen mode tap Ask: the PC\'s screen freezes so you can circle or highlight things and write your question, then tap Explain, Step by step, Just a hint, Check my working or Quiz me (or Ask). With the PC connected, questions go to a Claude Code session or the Claude Desktop app (chosen in Slate\'s PC settings), which you can open in the Claude apps. For the tablet\'s own screen, add "Ask Claude" to the S Pen\'s Air command (Air command › Add shortcuts › Ask Claude), add the "Ask Claude" tile to Quick Settings, or share a screenshot to Slate; without a PC these are answered by Claude Opus 5.5 with your API key.</string>
     <string name="study_history">Study history</string>
     <string name="study_ask_tablet">Ask about the tablet screen</string>
 

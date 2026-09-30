@@ -57,8 +57,23 @@
         <activity
             android:name=".study.CaptureActivity"
             android:excludeFromRecents="true"
+            android:taskAffinity=""
             android:exported="false"
             android:theme="@style/Theme.Slate.Invisible" />
+
+        <!-- A second app icon, "Ask Claude", so it can be added to the S Pen's Air command
+             (Air command › Add shortcuts) or the home screen: captures whatever is on screen. -->
+        <activity-alias
+            android:name=".AskClaudeShortcut"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/ask_tile"
+            android:targetActivity=".study.CaptureActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <service
             android:name=".study.CaptureService"

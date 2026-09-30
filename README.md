@@ -144,7 +144,7 @@ write your question, then tap **Ask**, **Explain**, **Step by step**, **Just a h
   up the first time, then stays in the background); replies stay in the app.
 - **History** keeps every question and answer on the tablet, rendered with maths and diagrams, with
   handwritten **Follow up**, **Export PDF** and **Share Markdown**.
-- **The tablet's own screen**: the "Ask Claude" Quick Settings tile (or sharing a screenshot to Slate)
+- **The tablet's own screen**: the "Ask Claude" app shortcut (add it to the S Pen's Air command via *Add shortcuts*), the "Ask Claude" Quick Settings tile (or sharing a screenshot to Slate)
   asks about whatever is on the tablet. Without a PC these go to Claude Opus 5.5 with your API key.
 - The main screen shows this month's approximate API spend.
 
