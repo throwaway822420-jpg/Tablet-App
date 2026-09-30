@@ -75,6 +75,9 @@ held S Pen button erases whole strokes.
   the background. If nothing changed by the time you tap Enter, that result (or the request still
   in flight) is used, so the text usually appears straight away. A new stroke makes the earlier
   result stale, and a new request goes out at the next pause.
+- **Unicode maths:** the prompt asks for real symbols (x², a₁, √, ≤, π), and a converter on the
+  tablet (`UnicodeMath.kt`) also turns any `x^2`, `a_1`, `sqrt(…)`, `<=` or LaTeX that slips
+  through into Unicode. Superscripts with no Unicode form (e.g. `q`) stay as `x^(q)`.
 - **Cost:** your own Anthropic API key (entered on the tablet's main screen, stored in app-private
   storage), billed to that account. Roughly a third of a cent per conversion, and convert-on-pause
   makes about 1.5–2 requests per Enter. The writing image is sent to Anthropic.
@@ -85,7 +88,7 @@ held S Pen button erases whole strokes.
 
 ```sh
 cd windows && dotnet test                 # 46 tests: protocol, state machine, mapping, transports, text
-cd android && ./gradlew testDebugUnitTest # 25 tests: protocol, tilt, area layout, ink, text chunks, API request shape
+cd android && ./gradlew testDebugUnitTest # 31 tests: protocol, tilt, area layout, ink, text chunks, Unicode maths, API request shape
 ```
 
 Both suites check the same golden packet from `PROTOCOL.md`, so the two ends can't drift apart.

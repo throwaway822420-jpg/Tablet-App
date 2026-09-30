@@ -54,7 +54,8 @@ class Recognizer(apiKey: String) {
         if (message.stopReason().orElse(null) == BetaStopReason.REFUSAL) throw Failure("Claude declined to read this writing.")
         val json = message.content().mapNotNull { it.text().orElse(null)?.text() }.joinToString("")
         return try {
-            JSONObject(json).getString("text").trim()
+            // Catch any ^, _, LaTeX or ASCII operators the model used anyway.
+            UnicodeMath.convert(JSONObject(json).getString("text")).trim()
         } catch (e: JSONException) {
             throw Failure("Unexpected reply from Claude.")
         }
@@ -108,11 +109,14 @@ class Recognizer(apiKey: String) {
             - Handwriting wraps early on a tablet, so join lines of running prose with a single space.
               Keep a line break only where the writer clearly started a new line on purpose, such as
               list items or separate equations.
-            - Write maths as plain Unicode, never LaTeX or markdown: superscripts (x², eⁿ),
-              subscripts (a₁), √, ∫, ∑, ∏, ∂, ∞, π, θ and other Greek letters, ≤ ≥ ≠ ≈ ± × ÷ · → ∈.
-              Write fractions as a/b, with brackets where needed, e.g. (x+1)/(x−1); use ½ ¼ ¾ only
-              for simple numeric fractions written that way. If an exponent or subscript has no
-              Unicode character, write x^(2k) or a_(ij).
+            - Write maths as plain Unicode characters, never LaTeX, markdown or ASCII stand-ins.
+              Use real superscript and subscript characters, not ^ or _:
+                x^2 → x²    e^(-x) → e⁻ˣ    x^n → xⁿ    a_1 → a₁    x_(n+1) → xₙ₊₁
+              and real symbols: sqrt(x) → √x, sqrt(x+1) → √(x+1), <= → ≤, >= → ≥, != → ≠,
+              +- → ±, * → ×, -> → →, pi → π, theta → θ, infinity → ∞, integral → ∫, sum → ∑.
+              Write fractions as a/b, bracketed where needed: (x+1)/(x−1). Use ½ ¼ ¾ only for
+              simple numeric fractions written that way. Only if a superscript or subscript
+              contains a character with no Unicode form, write it as x^(…) or a_(…).
             - Leave out anything crossed out or scribbled over.
             - If there's no legible writing, return an empty string.
 
