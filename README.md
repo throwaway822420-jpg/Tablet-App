@@ -71,10 +71,13 @@ held S Pen button erases whole strokes.
 - **Recognition** uses Claude Sonnet 5.5 (`claude-sonnet-5-5`) with thinking off
   (`between_tools`), JSON output so the reply is only the transcription, and server-side refusal
   fallback. The ink is rendered black on white, cropped and scaled to at most 1400 px.
-- **Convert on pause:** after 0.8 s without the pen touching, the ink is sent for recognition in
+- **Fast handwriting** (main screen switch) reads with Claude Haiku 4.5 instead: about twice as fast
+  and a third of the price, but it misreads messy writing and harder maths more often.
+- **Convert on pause:** after 0.5 s without the pen touching, the ink is sent for recognition in
   the background. If nothing changed by the time you tap Enter, that result (or the request still
   in flight) is used, so the text usually appears straight away. A new stroke makes the earlier
-  result stale, and a new request goes out at the next pause.
+  result stale, and a new request goes out at the next pause. The connection to Anthropic is opened
+  as soon as you start writing, so the first conversion doesn't wait for it.
 - **Unicode maths:** the prompt asks for real symbols (x², a₁, √, ≤, π), and a converter on the
   tablet (`UnicodeMath.kt`) also turns any `x^2`, `a_1`, `sqrt(…)`, `<=` or LaTeX that slips
   through into Unicode. Superscripts with no Unicode form (e.g. `q`) stay as `x^(q)`.

@@ -77,6 +77,17 @@ class WriteTest {
         assertTrue(params._headers().values("anthropic-beta").any { it.contains("server-side-fallback-2026-07-01") })
     }
 
+    @Test fun fastRequestUsesHaikuWithoutSonnetOnlyFields() {
+        val mapper = Class.forName("com.anthropic.core.ObjectMappers").getMethod("jsonMapper").invoke(null) as ObjectMapper
+        val params = Recognizer.request("iVBORw0KGgo=", fast = true)
+        val body: JsonNode = mapper.valueToTree(params._body())
+        assertEquals("claude-haiku-4-5", body["model"].asText())
+        assertTrue(body["thinking"] == null)
+        assertTrue(body["fallbacks"] == null)
+        assertEquals("json_schema", body["output_config"]["format"]["type"].asText())
+        assertTrue(params._headers().values("anthropic-beta").none { it.contains("server-side-fallback") })
+    }
+
     @Test fun calculatorUsesOpus55WithAdaptiveThinkingAndMediumEffort() {
         val mapper = Class.forName("com.anthropic.core.ObjectMappers").getMethod("jsonMapper").invoke(null) as ObjectMapper
         val body: JsonNode = mapper.valueToTree(Calculator.request("iVBORw0KGgo=")._body())

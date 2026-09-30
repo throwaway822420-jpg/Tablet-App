@@ -94,7 +94,13 @@ class Prefs(context: Context) {
             get() = this@Prefs.outputMode
             set(v) { this@Prefs.outputMode = v }
         override val addSpace get() = addSpaceAfterText
+        override val fast get() = fastHandwriting
     }
+
+    /** Read handwriting with Claude Haiku 4.5 instead of Sonnet 5.5. */
+    var fastHandwriting: Boolean
+        get() = p.getBoolean("fast_handwriting", false)
+        set(v) = p.edit().putBoolean("fast_handwriting", v).apply()
 
     /** Last pairing code that worked for a PC name, so reconnecting doesn't ask again. */
     fun pairCode(pcName: String): Int? = p.getInt("code_$pcName", -1).takeIf { it in 0..9999 }

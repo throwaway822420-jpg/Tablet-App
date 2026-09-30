@@ -60,6 +60,8 @@ class InkConverter<R : Any>(
 
     override fun onStrokeStarted() {
         main.removeCallbacks(pause)
+        // Open the connection to Anthropic while you write, so the first conversion doesn't wait for it.
+        app.slate.tablet.ai.Claude.warmUp(apiKey())
         enterVersion = -1
         onState(State.Writing)
     }
@@ -172,7 +174,7 @@ class InkConverter<R : Any>(
 
     private companion object {
         const val TAG = "SlateConvert"
-        const val PAUSE_MS = 800L
+        const val PAUSE_MS = 500L
         val POOL = Executors.newCachedThreadPool { r -> Thread(r, "slate-convert").apply { isDaemon = true } }
     }
 }

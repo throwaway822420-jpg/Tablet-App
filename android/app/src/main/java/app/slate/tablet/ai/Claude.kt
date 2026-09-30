@@ -22,6 +22,7 @@ class ClaudeFailure(message: String) : Exception(message)
 object Claude {
     private var client: AnthropicClient? = null
     private var clientKey = ""
+    @Volatile private var lastUseMs = 0L
 
     @Synchronized
     fun client(apiKey: String): AnthropicClient {
@@ -37,9 +38,24 @@ object Claude {
             }
     }
 
+    /**
+     * Opens (or keeps open) the HTTPS connection to Anthropic in the background with a free request,
+     * so the next real call skips the connection and TLS set-up. Does nothing if one was used recently.
+     */
+    fun warmUp(apiKey: String) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (apiKey.isBlank() || now - lastUseMs < WARM_INTERVAL_MS) return
+        lastUseMs = now
+        Thread({ runCatching { client(apiKey).models().list() } }, "slate-warmup").apply { isDaemon = true }.start()
+    }
+
+    // OkHttp keeps idle connections for 5 minutes.
+    private const val WARM_INTERVAL_MS = 4 * 60_000L
+
     /** Blocking call; maps API errors to [ClaudeFailure], records spend, rejects refusals. */
     fun call(apiKey: String, params: MessageCreateParams): BetaMessage {
         if (apiKey.isBlank()) throw ClaudeFailure("Add your Anthropic API key on Slate's main screen first.")
+        lastUseMs = android.os.SystemClock.elapsedRealtime()
         val message = try {
             client(apiKey).beta().messages().create(params)
         } catch (e: UnauthorizedException) {

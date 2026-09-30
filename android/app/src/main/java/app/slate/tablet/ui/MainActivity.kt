@@ -100,6 +100,7 @@ class MainActivity : Activity() {
                 .show()
         }
         bindSwitch(R.id.add_space, prefs.addSpaceAfterText) { prefs.addSpaceAfterText = it }
+        bindSwitch(R.id.fast_handwriting, prefs.fastHandwriting) { prefs.fastHandwriting = it }
         val keyField = findViewById<EditText>(R.id.api_key).apply { setText(prefs.apiKey) }
         findViewById<Button>(R.id.api_key_save).setOnClickListener {
             prefs.apiKey = keyField.text.toString()

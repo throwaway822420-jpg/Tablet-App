@@ -226,6 +226,11 @@
             style="@style/SettingSwitch"
             android:text="@string/pref_add_space" />
 
+        <Switch
+            android:id="@+id/fast_handwriting"
+            style="@style/SettingSwitch"
+            android:text="@string/pref_fast_handwriting" />
+
         <TextView
             style="@style/SectionHeader"
             android:text="@string/ime_header" />

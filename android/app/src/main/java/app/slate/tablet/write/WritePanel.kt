@@ -49,6 +49,8 @@ class WritePanel(
         val dark: Boolean
         var outputMode: OutputMode
         val addSpace: Boolean
+        /** Read handwriting with the faster, cheaper model. */
+        val fast: Boolean get() = false
     }
 
     val ink = Ink()
@@ -62,7 +64,7 @@ class WritePanel(
 
     private val writer = InkConverter(
         ink, { settings.apiKey },
-        convert = { key, png -> Recognizer.recognize(key, png) },
+        convert = { key, png -> Recognizer.recognize(key, png, settings.fast) },
         isEmpty = { it.isEmpty },
         deliver = { t, done -> target.type(t, effectiveMode(), done) },
         clearAfterDelivery = true,

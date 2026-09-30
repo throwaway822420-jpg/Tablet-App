@@ -40,6 +40,7 @@
     <string name="api_key_save">Save key</string>
     <string name="api_key_saved">API key saved.</string>
     <string name="api_key_cleared">API key removed.</string>
+    <string name="pref_fast_handwriting">Fast handwriting (Claude Haiku 4.5: about twice as fast and a third of the price, but misreads messy writing and harder maths more often)</string>
     <string name="pref_add_space">Add a space after each converted piece of text</string>
 
     <string name="spend_label">API spend this month: about $%1$.2f (%2$d requests). Handwriting ≈ 0.3¢, calculator ≈ 1–3¢ each.</string>

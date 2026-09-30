@@ -10,13 +10,15 @@ import com.anthropic.models.beta.messages.BetaThinkingConfigBetweenTools
 import com.anthropic.models.beta.messages.MessageCreateParams
 import org.json.JSONException
 
-/** Handwriting image → [Transcript], using Claude Sonnet 5.5. */
+/** Handwriting image → [Transcript], using Claude Sonnet 5.5 (or Claude Haiku 4.5 in fast mode). */
 object Recognizer {
     const val MODEL = "claude-sonnet-5-5"
+    /** Roughly twice as fast and a third of the price; misreads messy writing more often. */
+    const val FAST_MODEL = "claude-haiku-4-5"
 
     /** Blocking; call off the main thread. */
-    fun recognize(apiKey: String, png: ByteArray): Transcript {
-        val message = Claude.call(apiKey, request(Base64.encodeToString(png, Base64.NO_WRAP)))
+    fun recognize(apiKey: String, png: ByteArray, fast: Boolean = false): Transcript {
+        val message = Claude.call(apiKey, request(Base64.encodeToString(png, Base64.NO_WRAP), fast))
         return try {
             Transcript.fromJson(Claude.text(message))
         } catch (e: JSONException) {
@@ -25,14 +27,19 @@ object Recognizer {
     }
 
     /** The request for one handwriting image (base64 PNG). */
-    fun request(pngBase64: String): MessageCreateParams = MessageCreateParams.builder()
-        .model(MODEL)
+    fun request(pngBase64: String, fast: Boolean = false): MessageCreateParams = MessageCreateParams.builder()
+        .model(if (fast) FAST_MODEL else MODEL)
         .maxTokens(8192L)
-        // Reading handwriting doesn't need reasoning; this is Sonnet 5.5's thinking-off setting.
-        .thinking(BetaThinkingConfigBetweenTools.builder().build())
-        // If a safety classifier declines, retry on a fallback model server-side instead of failing.
-        .addBeta(Requests.FALLBACK_BETA)
-        .fallbacks(Requests.fallbacks())
+        .apply {
+            // Haiku 4.5 doesn't think unless asked and has no server-side fallbacks.
+            if (!fast) {
+                // Reading handwriting doesn't need reasoning; this is Sonnet 5.5's thinking-off setting.
+                thinking(BetaThinkingConfigBetweenTools.builder().build())
+                // If a safety classifier declines, retry on a fallback model server-side instead of failing.
+                addBeta(Requests.FALLBACK_BETA)
+                fallbacks(Requests.fallbacks())
+            }
+        }
         .system(SYSTEM_PROMPT)
         // JSON output guarantees the reply is only the transcription, with no preamble to strip.
         .outputConfig(BetaOutputConfig.builder().format(Requests.jsonFormat(SCHEMA)).build())
