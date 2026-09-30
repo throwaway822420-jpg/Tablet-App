@@ -9,6 +9,7 @@ import app.slate.tablet.protocol.Packet
 import app.slate.tablet.protocol.PacketType
 import app.slate.tablet.protocol.PenFlags
 import app.slate.tablet.protocol.Protocol
+import java.net.InetAddress
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -65,12 +66,32 @@ object SlateLink {
 
     val deviceName: String = Build.MODEL ?: "Android tablet"
 
+    // Where the bulk channel should connect for the current Wi-Fi session.
+    @Volatile private var wifiPc: InetAddress? = null
+    @Volatile private var wifiCode = -1
+
+    fun setWifiPc(address: InetAddress, pairCode: Int) {
+        wifiPc = address
+        wifiCode = pairCode
+    }
+
+    /**
+     * Address and pairing code for the bulk channel: over USB the PC is reached through
+     * `adb reverse` on loopback (no code needed); over Wi-Fi directly, with the code.
+     */
+    fun bulkTarget(): Pair<InetAddress, Int>? = when (status.transport) {
+        Transport.USB -> InetAddress.getLoopbackAddress() to -1
+        Transport.WIFI -> wifiPc?.let { it to wifiCode }
+        null -> null
+    }
+
     fun start() {
         synchronized(lock) {
             if (started) return
             started = true
         }
         UsbServer.start()
+        BulkLink.start()
         scheduler.scheduleWithFixedDelay(::tick, 100, 100, TimeUnit.MILLISECONDS)
     }
 

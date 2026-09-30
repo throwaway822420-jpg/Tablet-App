@@ -114,6 +114,8 @@ public sealed class UsbTransport : IDisposable
             Status(LinkState.Searching, "adb forward failed; see log.");
             return false;
         }
+        // The bulk channel (screen mirroring, Claude) runs the other way: the tablet connects to the PC.
+        await adb.ReverseAsync(ready.Serial, BulkFrame.Port, ct);
         return true;
     }
 

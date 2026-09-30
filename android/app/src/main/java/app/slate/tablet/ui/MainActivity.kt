@@ -71,6 +71,12 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.connect_ip).setOnClickListener { askForIp() }
 
         bindAreaScale()
+        val shortcutField = findViewById<EditText>(R.id.shortcuts).apply { setText(prefs.shortcuts) }
+        findViewById<Button>(R.id.shortcuts_save).setOnClickListener {
+            prefs.shortcuts = shortcutField.text.toString().ifBlank { Prefs.DEFAULT_SHORTCUTS }
+            shortcutField.setText(prefs.shortcuts)
+            Toast.makeText(this, R.string.shortcuts_saved, Toast.LENGTH_SHORT).show()
+        }
         findViewById<Button>(R.id.ime_enable).setOnClickListener {
             startActivity(Intent(android.provider.Settings.ACTION_INPUT_METHOD_SETTINGS))
         }

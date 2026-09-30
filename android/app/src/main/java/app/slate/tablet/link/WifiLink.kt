@@ -25,6 +25,7 @@ object WifiLink {
                 Log.w(TAG, "Couldn't open UDP socket", e)
                 return@thread
             }
+            SlateLink.setWifiPc(address, pairCode)
             val ch = UdpChannel(socket, "Wi-Fi")
             SlateLink.begin(ch, "Connecting to $pcName over Wi-Fi…")
             val dm = Resources.getSystem().displayMetrics

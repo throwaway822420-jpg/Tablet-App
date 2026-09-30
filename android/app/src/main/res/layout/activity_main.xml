@@ -128,6 +128,33 @@
 
         <TextView
             style="@style/SectionHeader"
+            android:text="@string/screen_header" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/screen_help" />
+
+        <EditText
+            android:id="@+id/shortcuts"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="top"
+            android:hint="@string/shortcuts_hint"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine|textNoSuggestions"
+            android:minLines="3"
+            android:typeface="monospace" />
+
+        <Button
+            android:id="@+id/shortcuts_save"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/shortcuts_save" />
+
+        <TextView
+            style="@style/SectionHeader"
             android:text="@string/write_header" />
 
         <TextView

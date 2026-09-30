@@ -100,6 +100,14 @@ public sealed class Adb
         return code == 0;
     }
 
+    /// <summary><c>adb -s serial reverse tcp:port tcp:port</c>, so 127.0.0.1:port on the tablet reaches the PC.</summary>
+    public async Task<bool> ReverseAsync(string serial, int port, CancellationToken ct)
+    {
+        var (code, output) = await RunAsync($"-s {serial} reverse tcp:{port} tcp:{port}", ct);
+        if (code != 0) Log.Info($"adb reverse failed: {output.Trim()}");
+        return code == 0;
+    }
+
     public async Task RemoveForwardAsync(int port, CancellationToken ct)
     {
         await RunAsync($"forward --remove tcp:{port}", ct, 3000);

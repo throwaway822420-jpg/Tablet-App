@@ -32,6 +32,12 @@ public sealed class SlateSettings
     /// <summary>4-digit code the tablet must send to pair over Wi-Fi.</summary>
     public int PairCode { get; set; } = NewPairCode();
 
+    /// <summary>Fastest H.264 encoder that worked last time (tried first); null = not known yet.</summary>
+    public VideoEncoder? PreferredEncoder { get; set; }
+
+    /// <summary>Explicit path to ffmpeg; null = next to Slate, the one Slate downloaded, or PATH.</summary>
+    public string? FfmpegPath { get; set; }
+
     /// <summary>Explicit path to adb; null = search next to Slate, PATH and the Android SDK.</summary>
     public string? AdbPath { get; set; }
 

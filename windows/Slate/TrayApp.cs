@@ -15,12 +15,16 @@ internal sealed class TrayApp : ApplicationContext
     private readonly ToolStripMenuItem _usbItem = new() { Enabled = false };
     private readonly ToolStripMenuItem _wifiItem = new() { Enabled = false };
     private readonly ToolStripMenuItem _codeItem = new() { Enabled = false };
+    private readonly ToolStripMenuItem _mirrorItem = new() { Enabled = false };
     private readonly Dictionary<string, LinkStatus> _statuses = new();
 
     private volatile RouterOptions _options;
     private volatile float _aspect;
     private UsbTransport? _usb;
     private WifiTransport? _wifi;
+    private BulkServer? _bulk;
+    private MirrorService? _mirror;
+    private string _mirrorStatus = "";
     private SettingsForm? _form;
     private LinkState _overall = LinkState.Off;
     private bool _testRunning;
@@ -35,6 +39,7 @@ internal sealed class TrayApp : ApplicationContext
         _router = new PenRouter(pen, () => _options);
         _bridge = new Bridge(_router, () => _aspect, Environment.MachineName, new KeyboardTyper(() => Settings.NewlineMode, RunOnUi));
         _bridge.StatusChanged += s => Post(() => OnStatus(s));
+        StartBulk();
         UpdateTarget();
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
 
@@ -42,6 +47,7 @@ internal sealed class TrayApp : ApplicationContext
         menu.Items.Add(_usbItem);
         menu.Items.Add(_wifiItem);
         menu.Items.Add(_codeItem);
+        menu.Items.Add(_mirrorItem);
         menu.Items.Add(new ToolStripSeparator());
         var settingsItem = new ToolStripMenuItem("Settings…", null, (_, _) => ShowSettings());
         settingsItem.Font = new Font(settingsItem.Font, FontStyle.Bold);
@@ -87,9 +93,35 @@ internal sealed class TrayApp : ApplicationContext
         RefreshMenu();
     }
 
+    /// <summary>The bulk channel (screen mirroring, Claude): one TCP listener for USB (via adb reverse) and Wi-Fi.</summary>
+    private void StartBulk()
+    {
+        try
+        {
+            _bulk = new BulkServer(() => Settings.PairCode);
+        }
+        catch (SocketException ex)
+        {
+            Log.Info($"Can't listen on TCP {BulkFrame.Port}; screen mirroring is off: {ex.Message}");
+            return;
+        }
+        _mirror = new MirrorService(_bulk, Settings, () => Settings.Save(Program.SettingsPath));
+        _mirror.MirrorChanged += () => Post(UpdateTarget);
+        _mirror.StatusChanged += s => Post(() =>
+        {
+            _mirrorStatus = s;
+            RefreshMenu();
+        });
+    }
+
+    /// <summary>For features that add bulk-channel handlers (asking Claude).</summary>
+    public MirrorService? Mirror => _mirror;
+    public BulkServer? Bulk => _bulk;
+
     private void UpdateTarget()
     {
-        var target = Monitors.Target(Settings);
+        // While mirroring, the pen maps onto the whole mirrored monitor, exactly as the tablet shows it.
+        var target = _mirror?.MirroredBounds ?? Monitors.Target(Settings);
         _options = new RouterOptions(target, Settings.BarrelMode, Settings.PressureGamma);
         _aspect = Settings.PreserveAspect ? (float)target.Aspect : 0f;
         _bridge.NotifyConfigChanged();
@@ -170,6 +202,7 @@ internal sealed class TrayApp : ApplicationContext
         _wifiItem.Text = "Wi-Fi: " + Describe(WifiTransport.Name, Settings.WifiEnabled);
         _codeItem.Text = $"Wi-Fi pairing code: {Settings.PairCode:D4}";
         _codeItem.Visible = Settings.WifiEnabled;
+        _mirrorItem.Text = "Screen: " + (_mirrorStatus.Length > 0 ? _mirrorStatus : "not mirroring");
     }
 
     public string Describe(string transport, bool enabled)
@@ -246,6 +279,8 @@ internal sealed class TrayApp : ApplicationContext
         _usb = null;
         _wifi = null;
         Task.WaitAll(Task.Run(() => usb?.Dispose()), Task.Run(() => wifi?.Dispose()));
+        _mirror?.Dispose();
+        _bulk?.Dispose();
         _bridge.Dispose();
         _tray.Dispose();
         _ui.Dispose();
