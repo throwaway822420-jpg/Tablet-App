@@ -71,6 +71,12 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.connect_ip).setOnClickListener { askForIp() }
 
         bindAreaScale()
+        findViewById<Button>(R.id.ime_enable).setOnClickListener {
+            startActivity(Intent(android.provider.Settings.ACTION_INPUT_METHOD_SETTINGS))
+        }
+        findViewById<Button>(R.id.ime_pick).setOnClickListener {
+            getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.showInputMethodPicker()
+        }
         bindSwitch(R.id.add_space, prefs.addSpaceAfterText) { prefs.addSpaceAfterText = it }
         val keyField = findViewById<EditText>(R.id.api_key).apply { setText(prefs.apiKey) }
         findViewById<Button>(R.id.api_key_save).setOnClickListener {
@@ -97,6 +103,9 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        findViewById<TextView>(R.id.spend).text = getString(
+            R.string.spend_label, app.slate.tablet.ai.Spend.thisMonthUsd(), app.slate.tablet.ai.Spend.callsThisMonth(),
+        )
     }
 
     override fun onPause() {

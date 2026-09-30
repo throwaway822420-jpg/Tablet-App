@@ -33,7 +33,7 @@ internal sealed class TrayApp : ApplicationContext
 
         _options = new RouterOptions(new PixelRect(0, 0, 1, 1), BarrelMode.Disabled, 1.0);
         _router = new PenRouter(pen, () => _options);
-        _bridge = new Bridge(_router, () => _aspect, Environment.MachineName, new KeyboardTyper(() => Settings.NewlineMode));
+        _bridge = new Bridge(_router, () => _aspect, Environment.MachineName, new KeyboardTyper(() => Settings.NewlineMode, RunOnUi));
         _bridge.StatusChanged += s => Post(() => OnStatus(s));
         UpdateTarget();
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
@@ -201,6 +201,25 @@ internal sealed class TrayApp : ApplicationContext
         finally
         {
             _testRunning = false;
+        }
+    }
+
+    /// <summary>Runs on the UI (STA) thread and waits; the clipboard only works there.</summary>
+    private void RunOnUi(Action action)
+    {
+        if (_ui.IsDisposed) return;
+        if (!_ui.InvokeRequired)
+        {
+            action();
+            return;
+        }
+        try
+        {
+            _ui.Invoke(action);
+        }
+        catch (InvalidOperationException)
+        {
+            // Shutting down.
         }
     }
 

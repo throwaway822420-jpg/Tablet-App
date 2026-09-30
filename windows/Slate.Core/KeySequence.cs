@@ -17,6 +17,8 @@ public readonly record struct KeyStroke(ushort VirtualKey, char Character, bool 
 {
     public const ushort VkReturn = 0x0D;
     public const ushort VkShift = 0x10;
+    public const ushort VkControl = 0x11;
+    public const ushort VkV = 0x56;
 
     public bool IsUnicode => VirtualKey == 0;
 
@@ -27,6 +29,15 @@ public readonly record struct KeyStroke(ushort VirtualKey, char Character, bool 
 /// <summary>Turns text into the key events that type it, handling line breaks per <see cref="NewlineMode"/>.</summary>
 public static class KeySequence
 {
+    /// <summary>Ctrl+V.</summary>
+    public static List<KeyStroke> Paste() => new()
+    {
+        KeyStroke.Vk(KeyStroke.VkControl, up: false),
+        KeyStroke.Vk(KeyStroke.VkV, up: false),
+        KeyStroke.Vk(KeyStroke.VkV, up: true),
+        KeyStroke.Vk(KeyStroke.VkControl, up: true),
+    };
+
     public static List<KeyStroke> For(string text, NewlineMode newlines)
     {
         var keys = new List<KeyStroke>(text.Length * 2);

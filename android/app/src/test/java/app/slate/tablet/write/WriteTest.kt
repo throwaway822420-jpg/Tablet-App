@@ -70,10 +70,21 @@ class WriteTest {
         assertEquals(1, body["thinking"].size()) // between_tools must not carry other fields
         assertEquals("default", body["fallbacks"].asText())
         assertEquals("json_schema", body["output_config"]["format"]["type"].asText())
-        assertEquals("text", body["output_config"]["format"]["schema"]["required"][0].asText())
+        assertEquals("segments", body["output_config"]["format"]["schema"]["required"][0].asText())
         val content = body["messages"][0]["content"]
         assertEquals("image", content[0]["type"].asText())
         assertEquals("image/png", content[0]["source"]["media_type"].asText())
         assertTrue(params._headers().values("anthropic-beta").any { it.contains("server-side-fallback-2026-07-01") })
+    }
+
+    @Test fun calculatorUsesOpus55WithAdaptiveThinkingAndMediumEffort() {
+        val mapper = Class.forName("com.anthropic.core.ObjectMappers").getMethod("jsonMapper").invoke(null) as ObjectMapper
+        val body: JsonNode = mapper.valueToTree(Calculator.request("iVBORw0KGgo=")._body())
+        assertEquals("claude-opus-5-5", body["model"].asText())
+        assertTrue(body["thinking"] == null) // Opus 5.5 always thinks; the field must be absent or adaptive
+        assertEquals("medium", body["output_config"]["effort"].asText())
+        assertEquals("default", body["fallbacks"].asText())
+        assertEquals(listOf("expression", "result", "arithmetic", "steps"),
+            body["output_config"]["format"]["schema"]["required"].map { it.asText() })
     }
 }

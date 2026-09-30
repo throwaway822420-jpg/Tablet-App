@@ -16,7 +16,7 @@ import app.slate.tablet.input.PenCapture
  */
 @SuppressLint("ViewConstructor")
 class WriteView(context: Context, val ink: Ink, private val dark: () -> Boolean) : View(context) {
-    var controller: WriteController? = null
+    var listener: InkListener? = null
 
     private val density = resources.displayMetrics.density
     private val eraseRadius = 14f * density
@@ -55,7 +55,7 @@ class WriteView(context: Context, val ink: Ink, private val dark: () -> Boolean)
                 requestUnbufferedDispatch(e)
                 erasing = e.getToolType(idx) == MotionEvent.TOOL_TYPE_ERASER ||
                     e.buttonState and (MotionEvent.BUTTON_STYLUS_PRIMARY or MotionEvent.BUTTON_STYLUS_SECONDARY) != 0
-                controller?.onStrokeStarted()
+                listener?.onStrokeStarted()
                 if (erasing) erase(e, idx) else ink.begin(e.getX(idx), e.getY(idx))
             }
             MotionEvent.ACTION_MOVE -> {
@@ -70,7 +70,7 @@ class WriteView(context: Context, val ink: Ink, private val dark: () -> Boolean)
                 if (e.actionMasked == MotionEvent.ACTION_POINTER_UP && e.actionIndex != idx) return true
                 if (!erasing) ink.end()
                 erasing = false
-                controller?.onInkChanged()
+                listener?.onInkChanged()
             }
         }
         invalidate()

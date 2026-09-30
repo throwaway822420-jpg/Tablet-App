@@ -1,24 +1,129 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Text;
 using Slate.Core;
 
 namespace Slate;
 
 /// <summary>
-/// Types text into the focused window as Unicode keystrokes, so any character (², √, π…) works
-/// regardless of keyboard layout. Line breaks follow the "Line breaks as" setting.
+/// Carries out TEXT messages from the tablet: types prose as Unicode keystrokes (any character, any
+/// keyboard layout, line breaks per the "Line breaks as" setting), pastes equations as MathML so
+/// Word/PowerPoint/OneNote turn them into real equations, and sets the clipboard for calculator
+/// answers. The user's clipboard is restored after pasting equations.
 /// </summary>
-internal sealed class KeyboardTyper(Func<NewlineMode> newlines) : ITextTyper
+internal sealed class KeyboardTyper(Func<NewlineMode> newlines, Action<Action> onUiThread) : ITextTyper
 {
+    private const int PasteSettleMs = 300;
+
     public void Type(string text)
     {
-        var inputs = KeySequence.For(text, newlines()).Select(ToInput).ToArray();
-        if (inputs.Length == 0) return;
+        var message = RichText.Parse(text);
+        if (message.IsClipboard)
+        {
+            onUiThread(() => SetClipboard(message.ClipboardText!, message.ClipboardMathMl));
+            return;
+        }
 
+        DataObject? saved = null;
+        bool pasted = false;
+        foreach (var part in message.Parts)
+        {
+            switch (part)
+            {
+                case RichPart.Typed t:
+                    Send(KeySequence.For(t.Text, newlines()));
+                    break;
+                case RichPart.Equation eq:
+                    bool ok = false;
+                    onUiThread(() =>
+                    {
+                        saved ??= SnapshotClipboard();
+                        ok = SetClipboard(eq.MathMl, eq.MathMl);
+                    });
+                    if (ok)
+                    {
+                        Send(KeySequence.Paste());
+                        Thread.Sleep(PasteSettleMs); // let the app read the clipboard before it changes again
+                        pasted = true;
+                    }
+                    else
+                    {
+                        Send(KeySequence.For(eq.Fallback, newlines()));
+                    }
+                    break;
+            }
+        }
+        if (pasted && saved is not null)
+        {
+            var restore = saved;
+            onUiThread(() => TrySetDataObject(restore));
+        }
+    }
+
+    private static void Send(List<KeyStroke> keys)
+    {
+        var inputs = keys.Select(ToInput).ToArray();
+        if (inputs.Length == 0) return;
         uint sent = Native.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Native.INPUT>());
         if (sent != inputs.Length)
             Log.Info($"SendInput typed {sent}/{inputs.Length} key events: {new Win32Exception(Marshal.GetLastWin32Error()).Message}. " +
                      "Windows blocks input to apps running as administrator unless Slate is too.");
+    }
+
+    /// <summary>Plain text, plus MathML in the formats Office reads, so pasting gives a real equation.</summary>
+    private static bool SetClipboard(string text, string? mathMl)
+    {
+        var data = new DataObject();
+        data.SetText(text, TextDataFormat.UnicodeText);
+        if (!string.IsNullOrEmpty(mathMl))
+        {
+            var bytes = Encoding.UTF8.GetBytes(mathMl);
+            data.SetData("MathML", new MemoryStream(bytes));
+            data.SetData("MathML Presentation", new MemoryStream(bytes));
+            data.SetData("application/mathml+xml", new MemoryStream(bytes));
+        }
+        return TrySetDataObject(data);
+    }
+
+    private static bool TrySetDataObject(DataObject data)
+    {
+        try
+        {
+            Clipboard.SetDataObject(data, copy: true, retryTimes: 5, retryDelay: 50);
+            return true;
+        }
+        catch (Exception ex) when (ex is ExternalException or ThreadStateException)
+        {
+            Log.Info($"Couldn't set the clipboard: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Copies whatever formats the current clipboard can give, to put back later.</summary>
+    private static DataObject SnapshotClipboard()
+    {
+        var copy = new DataObject();
+        try
+        {
+            var current = Clipboard.GetDataObject();
+            if (current is null) return copy;
+            foreach (var format in current.GetFormats(autoConvert: false))
+            {
+                try
+                {
+                    var value = current.GetData(format, autoConvert: false);
+                    if (value is not null) copy.SetData(format, value);
+                }
+                catch (Exception ex) when (ex is ExternalException or COMException or OutOfMemoryException or NotSupportedException or InvalidOperationException)
+                {
+                    // Some formats (delay-rendered, private) can't be copied; skip them.
+                }
+            }
+        }
+        catch (ExternalException)
+        {
+        }
+        return copy;
     }
 
     private static Native.INPUT ToInput(KeyStroke k) => new()

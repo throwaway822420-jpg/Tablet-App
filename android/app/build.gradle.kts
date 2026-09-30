@@ -42,4 +42,6 @@ dependencies {
     implementation("com.anthropic:anthropic-java:2.66.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.fasterxml.jackson.core:jackson-databind:2.19.4")
+    // Real org.json for unit tests (Android's is a stub off-device).
+    testImplementation("org.json:json:20240303")
 }

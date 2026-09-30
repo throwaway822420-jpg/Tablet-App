@@ -37,6 +37,22 @@ class Prefs(context: Context) {
         get() = p.getBoolean("add_space", true)
         set(v) = p.edit().putBoolean("add_space", v).apply()
 
+    /** How maths in handwriting is written out: Unicode, Equation or LaTeX. */
+    var outputMode: app.slate.tablet.write.OutputMode
+        get() = runCatching { app.slate.tablet.write.OutputMode.valueOf(p.getString("output_mode", "UNICODE")!!) }
+            .getOrDefault(app.slate.tablet.write.OutputMode.UNICODE)
+        set(v) = p.edit().putString("output_mode", v.name).apply()
+
+    /** Settings view for a [app.slate.tablet.write.WritePanel]. */
+    fun panelSettings() = object : app.slate.tablet.write.WritePanel.Settings {
+        override val apiKey get() = this@Prefs.apiKey
+        override val dark get() = darkCanvas
+        override var outputMode
+            get() = this@Prefs.outputMode
+            set(v) { this@Prefs.outputMode = v }
+        override val addSpace get() = addSpaceAfterText
+    }
+
     /** Last pairing code that worked for a PC name, so reconnecting doesn't ask again. */
     fun pairCode(pcName: String): Int? = p.getInt("code_$pcName", -1).takeIf { it in 0..9999 }
 
