@@ -150,6 +150,7 @@ JSON types:
 | `stream.stop` | tablet → PC | |
 | `stream` | PC → tablet | `state`: setup / starting / running / stopped / error, `message`, and when running `w, h, fps, encoder, monitor` |
 | `cursor` | PC → tablet | `x, y` (0..1 of the mirrored monitor) |
+| `textfocus` | PC → tablet | `editable` (bool). Sent while streaming when keyboard focus moves into (true) or out of (false) a text field, per UI Automation. The tablet opens its handwriting pad only if the user touched the picture in the last 2.5 s. Password fields count as not editable. |
 | `mouse` | tablet → PC | `action`: move / down / up / click / dblclick / rightclick, `x, y` |
 | `scroll` | tablet → PC | `x, y`, `dx, dy` in wheel notches (fractions allowed; +dy scrolls down) |
 | `keys` | tablet → PC | `combo`, e.g. `Ctrl+Shift+Z`, `Alt+Tab`, `Win+D`, `F5` |

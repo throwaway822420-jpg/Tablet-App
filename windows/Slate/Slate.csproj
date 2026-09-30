@@ -4,6 +4,8 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <!-- Only for UI Automation (UIAutomationClient), to tell when a text field has focus. -->
+    <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Slate</AssemblyName>
@@ -20,6 +22,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Slate.Core\Slate.Core.csproj" />
+    <!-- UseWPF drops System.IO from the implicit usings. -->
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
   </ItemGroup>
 
   <!-- Bundled adb: run scripts\fetch-platform-tools.ps1 to populate windows\Slate\platform-tools. -->

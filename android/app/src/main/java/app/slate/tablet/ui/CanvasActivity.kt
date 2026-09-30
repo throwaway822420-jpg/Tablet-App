@@ -101,6 +101,7 @@ class CanvasActivity : Activity() {
         // App switch, screen off, notification shade: never leave the PC with the pen down.
         view.capture.release()
         panel.pause()
+        mirror.pause()
         mirror.stop() // no video while the surface isn't visible
         super.onPause()
     }
@@ -111,6 +112,12 @@ class CanvasActivity : Activity() {
             view.capture.release()
             mirror.mirror.capture.release()
         }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        // Back closes the handwriting pad over the PC's screen before leaving the surface.
+        if (mode == Mode.SCREEN && mirror.padOpen) mirror.closePad() else super.onBackPressed()
     }
 
     private fun setMode(m: Mode) {

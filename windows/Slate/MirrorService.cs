@@ -16,13 +16,13 @@ internal sealed class MirrorService : IDisposable
     private readonly InputInjector _input = new();
     private readonly SemaphoreSlim _startLock = new(1, 1);
     private readonly System.Threading.Timer _cursorTimer;
+    private readonly TextFocusWatcher _focus;
     private ScreenStreamer? _streamer;
     private CancellationTokenSource? _startCts;
     private volatile Screen? _screen;
     private bool _usb;
     private (int X, int Y) _lastCursor = (int.MinValue, 0);
 
-    /// <summary>Extra JSON handlers (e.g. asking Claude), by message type.</summary>
     /// <summary>Extra handlers by message type (e.g. asking Claude); the byte array is a Blob's payload.</summary>
     public Dictionary<string, Action<JsonObject, byte[]?>> Handlers { get; } = new();
 
@@ -41,6 +41,8 @@ internal sealed class MirrorService : IDisposable
         _bulk.Disconnected += OnDisconnected;
         _bulk.FrameReceived += OnFrame;
         _cursorTimer = new System.Threading.Timer(_ => SendCursor(), null, Timeout.Infinite, Timeout.Infinite);
+        // Tells the tablet when a text field gets focus, so it can bring up the handwriting pad.
+        _focus = new TextFocusWatcher(editable => _bulk.Send(new JsonObject { ["t"] = "textfocus", ["editable"] = editable }));
     }
 
     /// <summary>The monitor being mirrored, or null.</summary>
@@ -126,8 +128,8 @@ internal sealed class MirrorService : IDisposable
         {
             case "move": _input.MouseMove(p.X, p.Y); break;
             case "down": _input.Button(p.X, p.Y, down: true); break;
-            case "up": _input.Button(p.X, p.Y, down: false); break;
-            case "click": _input.Click(p.X, p.Y); break;
+            case "up": _input.Button(p.X, p.Y, down: false); _focus.Poke(); break;
+            case "click": _input.Click(p.X, p.Y); _focus.Poke(); break;
             case "dblclick": _input.Click(p.X, p.Y, count: 2); break;
             case "rightclick": _input.Click(p.X, p.Y, right: true); break;
         }
@@ -141,6 +143,7 @@ internal sealed class MirrorService : IDisposable
             c.Int("id"), (float)c.Num("x"), (float)c.Num("y"),
             c.Str("phase") switch { "down" => TouchPhase.Down, "up" => TouchPhase.Up, _ => TouchPhase.Move })).ToList();
         _input.Touch(contacts, bounds);
+        if (contacts.Any(c => c.Phase == TouchPhase.Up)) _focus.Poke();
     }
 
     private async Task StartStreamAsync(string monitorId, int fps, int bitrate)
@@ -214,6 +217,7 @@ internal sealed class MirrorService : IDisposable
                 ["message"] = $"{src.Width}×{src.Height} · {src.Fps} fps · {streamer.Encoder}",
             });
             _cursorTimer.Change(0, 33);
+            _focus.Start();
             StatusChanged?.Invoke($"Mirroring {screen.DeviceName} ({streamer.Encoder})");
             MirrorChanged?.Invoke();
         }
@@ -248,6 +252,7 @@ internal sealed class MirrorService : IDisposable
     private void StopStreamCore()
     {
         _cursorTimer.Change(Timeout.Infinite, Timeout.Infinite);
+        _focus.Stop();
         var s = _streamer;
         _streamer = null;
         s?.Dispose();
@@ -276,6 +281,7 @@ internal sealed class MirrorService : IDisposable
     {
         StopStream("PC app closed");
         _cursorTimer.Dispose();
+        _focus.Dispose();
         _input.Dispose();
     }
 }

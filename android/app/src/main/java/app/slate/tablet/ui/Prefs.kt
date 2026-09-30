@@ -67,6 +67,11 @@ class Prefs(context: Context) {
         get() = p.getBoolean("windows_touch", false)
         set(v) = p.edit().putBoolean("windows_touch", v).apply()
 
+    /** In Screen mode, bring up the handwriting pad when a tap puts the PC's focus in a text field. */
+    var writeOnTextField: Boolean
+        get() = p.getBoolean("write_on_text_field", true)
+        set(v) = p.edit().putBoolean("write_on_text_field", v).apply()
+
     var followCursor: Boolean
         get() = p.getBoolean("follow_cursor", true)
         set(v) = p.edit().putBoolean("follow_cursor", v).apply()

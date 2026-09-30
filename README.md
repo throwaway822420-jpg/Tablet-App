@@ -117,6 +117,11 @@ switches back. On a sideloaded APK, Android may first need *App info › ⋮ ›
 - The S Pen is a real pen right on the picture, at any zoom. Fingers navigate: tap = click, hold =
   right-click, drag = drag, two fingers = scroll or pinch-zoom the view, three-finger swipes =
   switch apps / task view / desktop. Or switch fingers to real Windows touch in ⋯ View.
+- **Write straight into the PC:** tap a text field on the mirrored screen and a handwriting pad
+  slides up over the bottom of the tablet. The PC's screen shrinks into the space above it and
+  ignores touches while you write; **Enter** types what you wrote, ↵/⌫/Space press the real keys,
+  **✕ Screen** (or Back) goes back to navigating. The PC spots text fields with UI Automation
+  (password fields are skipped). Turn it off, or open the pad by hand, in ⋯ View.
 - ⋯ View: fit, shrink, zoom, actual pixels, follow the cursor when zoomed, mini-map, monitor and
   quality. Shortcut buttons down the left edge are editable on the main screen.
 
@@ -141,7 +146,7 @@ write your question, then tap **Ask**, **Explain**, **Step by step**, **Just a h
 ## Tests
 
 ```sh
-cd windows && dotnet test                 # 71 tests, incl. video pipeline with real ffmpeg and a fake Claude Code
+cd windows && dotnet test                 # 85 tests, incl. video pipeline with real ffmpeg and a fake Claude Code
 cd android && ./gradlew testDebugUnitTest # 55 tests: protocol, H.264/SPS, viewport, transcripts, calculator, study store
 ```
 

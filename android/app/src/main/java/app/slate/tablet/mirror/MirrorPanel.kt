@@ -17,6 +17,7 @@ import app.slate.tablet.link.BulkLink
 import app.slate.tablet.link.SlateLink
 import app.slate.tablet.link.Transport
 import app.slate.tablet.ui.Prefs
+import app.slate.tablet.write.PcTarget
 import app.slate.tablet.write.WritePanel
 import org.json.JSONObject
 
@@ -38,6 +39,66 @@ class MirrorPanel(
     private val shortcutScroll = ScrollView(context)
     private var active = false
     private var running = false
+    private lateinit var right: LinearLayout
+
+    /**
+     * The handwriting pad: slides up over the bottom of the screen when you tap into a text field on
+     * the PC. The PC's screen stays visible (shrunk into the space above it) but ignores touches.
+     */
+    private var padView: WritePanel? = null
+    private val pad: WritePanel get() = padView ?: createPad().also { padView = it }
+
+    private fun createPad(): WritePanel {
+        fun key(label: String, action: () -> Unit) = WritePanel.makeButton(context, label, onClick = action)
+        fun keys(combo: String) = BulkLink.send(JSONObject().put("t", "keys").put("combo", combo))
+        return WritePanel(
+            context, PcTarget(context) { prefs.addSpaceAfterText }, prefs.panelSettings(), vertical = false,
+            extraButtons = listOf(key("✕ Screen") { closePad() }),
+            trailingButtons = listOf(key("Space") { keys("Space") }, key("⌫") { keys("Backspace") }, key("↵") { keys("Enter") }),
+        ).also { p ->
+            p.visibility = View.GONE
+            p.setBackgroundColor(if (prefs.darkCanvas) Color.rgb(24, 24, 24) else Color.WHITE)
+            p.elevation = dp(8).toFloat()
+            addView(p, LayoutParams(LayoutParams.MATCH_PARENT, 0, Gravity.BOTTOM))
+        }
+    }
+
+    val padOpen: Boolean get() = padView?.visibility == View.VISIBLE
+
+    fun openPad() {
+        if (padOpen) return
+        val h = (height * 0.4f).toInt().coerceAtLeast(dp(260))
+        pad.layoutParams = (pad.layoutParams as LayoutParams).apply { height = h }
+        pad.visibility = View.VISIBLE
+        mirror.inputEnabled = false
+        // The whole PC screen moves into the space above the pad, so the text field stays in view.
+        mirror.layoutParams = (mirror.layoutParams as LayoutParams).apply { bottomMargin = h }
+        right.visibility = View.GONE
+        shortcutScroll.visibility = View.GONE
+        pad.writeView.requestFocus()
+    }
+
+    fun closePad() {
+        if (!padOpen) return
+        pad.pause()
+        pad.visibility = View.GONE
+        mirror.layoutParams = (mirror.layoutParams as LayoutParams).apply { bottomMargin = 0 }
+        mirror.inputEnabled = true
+        right.visibility = View.VISIBLE
+        applyPrefs()
+        mirror.requestFocus()
+    }
+
+    /** Stops any recognition in flight (the surface is going away). */
+    fun pause() {
+        padView?.pause()
+    }
+
+    private fun onTextFocus(editable: Boolean) {
+        // Only when the focus follows your own tap, not when an app moves focus by itself.
+        val tapped = android.os.SystemClock.uptimeMillis() - mirror.lastTouchMs < 2500
+        if (editable && tapped && prefs.writeOnTextField && running) openPad()
+    }
 
     private var shotRequested = false
     private val onShot: (JSONObject, ByteArray) -> Unit = { h, data ->
@@ -78,6 +139,7 @@ class MirrorPanel(
         when (o.optString("t")) {
             "stream" -> onStream(o)
             "cursor" -> mirror.onCursor(o.optDouble("x").toFloat(), o.optDouble("y").toFloat())
+            "textfocus" -> onTextFocus(o.optBoolean("editable"))
         }
     }
 
@@ -108,7 +170,7 @@ class MirrorPanel(
         val more = WritePanel.makeButton(context, "⋯ View") {}
         more.setOnClickListener { showMenu(more) }
         val fit = WritePanel.makeButton(context, "Fit") { mirror.viewport.reset(1f); mirror.applyTransform() }
-        val right = LinearLayout(context).apply {
+        right = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             (extraButtons + listOf(more, fit) + toolButtons).forEach {
                 addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(56)).apply { topMargin = dp(6) })
@@ -136,6 +198,7 @@ class MirrorPanel(
 
     fun stop() {
         if (!active) return
+        closePad()
         active = false
         running = false
         mirror.capture.release()
@@ -175,7 +238,7 @@ class MirrorPanel(
     private fun applyPrefs() {
         mirror.fingerMode = if (prefs.windowsTouch) MirrorView.FingerMode.TOUCH else MirrorView.FingerMode.NAVIGATE
         mirror.followCursor = prefs.followCursor
-        shortcutScroll.visibility = if (prefs.showShortcuts) View.VISIBLE else View.GONE
+        shortcutScroll.visibility = if (prefs.showShortcuts && !padOpen) View.VISIBLE else View.GONE
     }
 
     private fun buildShortcuts() {
@@ -203,6 +266,11 @@ class MirrorPanel(
         m.add("Fingers: Windows touch").apply {
             isCheckable = true; isChecked = prefs.windowsTouch
             setOnMenuItemClickListener { prefs.windowsTouch = !prefs.windowsTouch; applyPrefs(); true }
+        }
+        m.add("Handwriting pad (write into the PC)").setOnMenuItemClickListener { openPad(); true }
+        m.add("Handwriting pad when I tap a text field").apply {
+            isCheckable = true; isChecked = prefs.writeOnTextField
+            setOnMenuItemClickListener { prefs.writeOnTextField = !prefs.writeOnTextField; true }
         }
         m.add("Follow the cursor when zoomed").apply {
             isCheckable = true; isChecked = prefs.followCursor

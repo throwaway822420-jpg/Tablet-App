@@ -43,6 +43,17 @@ class MirrorView(context: Context) : FrameLayout(context), TextureView.SurfaceTe
     var followCursor = true
     var showMinimap = true
 
+    /** False while the handwriting pad is over the screen: touches and the pen do nothing to the PC. */
+    var inputEnabled = true
+        set(v) {
+            if (!v) { cancelFingers(); capture.release() }
+            field = v
+        }
+
+    /** When a finger or the pen last touched the picture, to tell a tap into a text field from focus moving by itself. */
+    var lastTouchMs = 0L
+        private set
+
     /** Called when the user changes zoom/pan, e.g. to update toolbar state. */
     var onViewportChanged: (() -> Unit)? = null
 
@@ -119,6 +130,8 @@ class MirrorView(context: Context) : FrameLayout(context), TextureView.SurfaceTe
 
     override fun dispatchTouchEvent(e: MotionEvent): Boolean {
         // Children (none interactive) never get touches; the mirror handles everything itself.
+        if (!inputEnabled) return true
+        if (e.actionMasked == MotionEvent.ACTION_DOWN || e.actionMasked == MotionEvent.ACTION_UP) lastTouchMs = SystemClock.uptimeMillis()
         if (PenCapture.stylusIndex(e) >= 0) {
             penNearUntil = SystemClock.uptimeMillis() + 400
             cancelFingers()
@@ -130,6 +143,7 @@ class MirrorView(context: Context) : FrameLayout(context), TextureView.SurfaceTe
     }
 
     override fun dispatchHoverEvent(e: MotionEvent): Boolean {
+        if (!inputEnabled) return true
         if (PenCapture.stylusIndex(e) >= 0) penNearUntil = SystemClock.uptimeMillis() + 400
         return capture.onHoverEvent(e) || super.dispatchHoverEvent(e)
     }
