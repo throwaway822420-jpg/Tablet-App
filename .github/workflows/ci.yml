@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet build Slate.sln -c Release -warnaserror
+      - run: dotnet test Slate.Core.Tests -c Release --no-build
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - run: ./gradlew --no-daemon testDebugUnitTest assembleDebug lintDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: slate-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk

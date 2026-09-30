@@ -1,0 +1,12 @@
+package app.slate.tablet
+
+import android.app.Application
+import app.slate.tablet.link.SlateLink
+
+class SlateApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        // Start listening for the PC over USB as soon as the app runs.
+        SlateLink.start()
+    }
+}

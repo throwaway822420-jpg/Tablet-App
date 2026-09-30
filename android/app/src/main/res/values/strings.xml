@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Slate</string>
+    <string name="tagline">Use this tablet and S Pen as a drawing tablet for your Windows PC.</string>
+
+    <string name="open_canvas">Open drawing surface</string>
+    <string name="disconnect">Disconnect</string>
+
+    <string name="usb_header">USB (recommended)</string>
+    <string name="usb_help">1. On the PC, run Slate (it sits in the notification area).\n2. On this tablet, turn on Developer options: Settings › About tablet › Software information › tap Build number 7 times.\n3. Settings › Developer options › turn on USB debugging.\n4. Plug the tablet into the PC and tap Allow on the USB debugging prompt.\nThe tablet connects by itself and opens the drawing surface.</string>
+
+    <string name="wifi_header">Wi-Fi</string>
+    <string name="wifi_searching">Looking for PCs running Slate on this network…</string>
+    <string name="connect_by_ip">Connect by IP address…</string>
+    <string name="pair_title">Pair with %1$s</string>
+    <string name="pair_message">Enter the 4-digit code shown in Slate on the PC (right-click its icon in the notification area).</string>
+    <string name="pair_code_hint">Code</string>
+    <string name="ip_hint">PC IP address, e.g. 192.168.1.20</string>
+    <string name="connect">Connect</string>
+    <string name="cancel">Cancel</string>
+    <string name="bad_code">The code is 4 digits.</string>
+    <string name="bad_ip">That isn\'t an IP address.</string>
+
+    <string name="canvas_header">Drawing surface</string>
+    <string name="pref_keep_screen_on">Keep screen on</string>
+    <string name="pref_dark_canvas">Dark surface</string>
+    <string name="pref_show_outline">Show the active area</string>
+    <string name="pref_show_status">Show connection and latency</string>
+    <string name="spen_note">Tip: if pressing the S Pen button opens Air command, turn it off in Settings › Advanced features › S Pen › Air command so the button reaches the PC.</string>
+
+    <string name="status_idle">Not connected. Waiting for the PC over USB, or pick a PC below.</string>
+    <string name="canvas_waiting">Waiting for the PC…</string>
+    <string name="canvas_back_hint">Swipe in from an edge and go back to leave.</string>
+</resources>
