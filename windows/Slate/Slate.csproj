@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Slate</AssemblyName>
+    <RootNamespace>Slate</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Physical-pixel coordinates everywhere, so mapping is right at 125%/150% scaling. -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <!-- InjectSyntheticPointerInput needs Windows 10 1809; SyntheticPen reports it at startup if missing. -->
+    <!-- The native structs are laid out for 64-bit (x64 and ARM64). -->
+    <Prefer32Bit>false</Prefer32Bit>
+    <!-- Lets the project build (not run) on Linux/macOS CI. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Slate.Core\Slate.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Bundled adb: run scripts\fetch-platform-tools.ps1 to populate windows\Slate\platform-tools. -->
+  <ItemGroup Condition="Exists('platform-tools')">
+    <None Include="platform-tools\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

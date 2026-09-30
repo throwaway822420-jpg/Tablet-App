@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:maxWidth="720dp"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textAppearance="@android:style/TextAppearance.DeviceDefault.Large"
+            android:textSize="32sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="@string/tagline" />
+
+        <TextView
+            android:id="@+id/status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@android:style/TextAppearance.DeviceDefault.Medium" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/open_canvas"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/open_canvas" />
+
+            <Button
+                android:id="@+id/disconnect"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/disconnect" />
+        </LinearLayout>
+
+        <TextView
+            style="@style/SectionHeader"
+            android:text="@string/usb_header" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/usb_help" />
+
+        <TextView
+            style="@style/SectionHeader"
+            android:text="@string/wifi_header" />
+
+        <LinearLayout
+            android:id="@+id/pc_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <TextView
+            android:id="@+id/pc_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/wifi_searching" />
+
+        <Button
+            android:id="@+id/connect_ip"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/connect_by_ip" />
+
+        <TextView
+            style="@style/SectionHeader"
+            android:text="@string/canvas_header" />
+
+        <Switch
+            android:id="@+id/keep_screen_on"
+            style="@style/SettingSwitch"
+            android:text="@string/pref_keep_screen_on" />
+
+        <Switch
+            android:id="@+id/dark_canvas"
+            style="@style/SettingSwitch"
+            android:text="@string/pref_dark_canvas" />
+
+        <Switch
+            android:id="@+id/show_outline"
+            style="@style/SettingSwitch"
+            android:text="@string/pref_show_outline" />
+
+        <Switch
+            android:id="@+id/show_status"
+            style="@style/SettingSwitch"
+            android:text="@string/pref_show_status" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/spen_note" />
+    </LinearLayout>
+</ScrollView>

@@ -1,0 +1,197 @@
+package app.slate.tablet.ui
+
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.Intent
+import android.os.Bundle
+import android.text.InputFilter
+import android.text.InputType
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.Switch
+import android.widget.TextView
+import android.widget.Toast
+import app.slate.tablet.R
+import app.slate.tablet.link.Discovery
+import app.slate.tablet.link.FoundPc
+import app.slate.tablet.link.SlateLink
+import app.slate.tablet.link.Transport
+import app.slate.tablet.link.WifiLink
+import app.slate.tablet.protocol.Protocol
+import java.net.InetAddress
+import kotlin.concurrent.thread
+
+/** Setup screen: connection status, Wi-Fi PC list, and drawing-surface options. */
+class MainActivity : Activity() {
+    private lateinit var prefs: Prefs
+    private lateinit var discovery: Discovery
+    private lateinit var statusText: TextView
+    private lateinit var pcList: LinearLayout
+    private lateinit var pcEmpty: TextView
+    private lateinit var openCanvas: Button
+    private lateinit var disconnect: Button
+
+    private var lastPhase = SlateLink.status.phase
+    private var resumed = false
+
+    /** The Wi-Fi PC we're pairing with, so its code is remembered once the PC accepts it. */
+    private var pairing: Pair<String, Int>? = null
+
+    private val onStatus: (SlateLink.Status) -> Unit = { s ->
+        statusText.text = when (s.phase) {
+            SlateLink.Phase.IDLE -> s.message.ifEmpty { getString(R.string.status_idle) }
+            SlateLink.Phase.CONNECTING -> s.message
+            SlateLink.Phase.CONNECTED -> if (s.rttMs >= 0) "${s.message} · ${s.rttMs} ms round trip" else s.message
+        }
+        val connected = s.phase == SlateLink.Phase.CONNECTED
+        disconnect.isEnabled = s.phase != SlateLink.Phase.IDLE
+        if (connected && lastPhase != SlateLink.Phase.CONNECTED) {
+            pairing?.let { (name, code) -> if (s.transport == Transport.WIFI) prefs.savePairCode(name, code) }
+            pairing = null
+            if (resumed) startActivity(Intent(this, CanvasActivity::class.java))
+        }
+        lastPhase = s.phase
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        prefs = Prefs(this)
+        statusText = findViewById(R.id.status)
+        pcList = findViewById(R.id.pc_list)
+        pcEmpty = findViewById(R.id.pc_empty)
+        openCanvas = findViewById(R.id.open_canvas)
+        disconnect = findViewById(R.id.disconnect)
+
+        openCanvas.setOnClickListener { startActivity(Intent(this, CanvasActivity::class.java)) }
+        disconnect.setOnClickListener { SlateLink.disconnect() }
+        findViewById<Button>(R.id.connect_ip).setOnClickListener { askForIp() }
+
+        bindSwitch(R.id.keep_screen_on, prefs.keepScreenOn) { prefs.keepScreenOn = it }
+        bindSwitch(R.id.dark_canvas, prefs.darkCanvas) { prefs.darkCanvas = it }
+        bindSwitch(R.id.show_outline, prefs.showOutline) { prefs.showOutline = it }
+        bindSwitch(R.id.show_status, prefs.showStatus) { prefs.showStatus = it }
+
+        discovery = Discovery(this, ::showPcs)
+        SlateLink.start()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        lastPhase = SlateLink.status.phase
+        SlateLink.addListener(onStatus)
+        discovery.start()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        resumed = true
+    }
+
+    override fun onPause() {
+        resumed = false
+        super.onPause()
+    }
+
+    override fun onStop() {
+        discovery.stop()
+        SlateLink.removeListener(onStatus)
+        super.onStop()
+    }
+
+    private fun bindSwitch(id: Int, value: Boolean, save: (Boolean) -> Unit) {
+        findViewById<Switch>(id).apply {
+            isChecked = value
+            setOnCheckedChangeListener { _, checked -> save(checked) }
+        }
+    }
+
+    private fun showPcs(pcs: List<FoundPc>) {
+        pcList.removeAllViews()
+        pcEmpty.visibility = if (pcs.isEmpty()) TextView.VISIBLE else TextView.GONE
+        for (pc in pcs) {
+            pcList.addView(Button(this).apply {
+                text = "${pc.name}  (${pc.address.hostAddress})"
+                isAllCaps = false
+                setOnClickListener { pair(pc.name, pc.address, pc.port) }
+            })
+        }
+    }
+
+    private fun pair(name: String, address: InetAddress, port: Int) {
+        val saved = prefs.pairCode(name)
+        val input = codeField().apply { saved?.let { setText("%04d".format(it)) } }
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.pair_title, name))
+            .setMessage(R.string.pair_message)
+            .setView(padded(input))
+            .setPositiveButton(R.string.connect) { _, _ ->
+                val code = input.text.toString().toIntOrNull()
+                if (input.text.length != 4 || code == null) {
+                    Toast.makeText(this, R.string.bad_code, Toast.LENGTH_SHORT).show()
+                } else {
+                    pairing = name to code
+                    WifiLink.connect(address, port, code, name)
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /** For networks that block broadcasts (guest Wi-Fi, some routers). */
+    private fun askForIp() {
+        val ip = EditText(this).apply {
+            hint = getString(R.string.ip_hint)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            isSingleLine = true
+        }
+        val code = codeField()
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(ip)
+            addView(code)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.connect_by_ip)
+            .setView(padded(box))
+            .setPositiveButton(R.string.connect) { _, _ ->
+                val host = ip.text.toString().trim()
+                val pairCode = code.text.toString().toIntOrNull()
+                if (code.text.length != 4 || pairCode == null) {
+                    Toast.makeText(this, R.string.bad_code, Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                thread(isDaemon = true) {
+                    val addr = if (IP_PATTERN.matches(host)) runCatching { InetAddress.getByName(host) }.getOrNull() else null
+                    runOnUiThread {
+                        if (addr == null) {
+                            Toast.makeText(this, R.string.bad_ip, Toast.LENGTH_SHORT).show()
+                        } else {
+                            pairing = host to pairCode
+                            WifiLink.connect(addr, Protocol.WIFI_PORT, pairCode, host)
+                        }
+                    }
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun codeField() = EditText(this).apply {
+        hint = getString(R.string.pair_code_hint)
+        inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        filters = arrayOf(InputFilter.LengthFilter(4))
+        isSingleLine = true
+    }
+
+    private fun padded(v: android.view.View) = LinearLayout(this).apply {
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        setPadding(pad, pad / 2, pad, 0)
+        addView(v, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+    }
+
+    private companion object {
+        val IP_PATTERN = Regex("""^\d{1,3}(\.\d{1,3}){3}$""")
+    }
+}
