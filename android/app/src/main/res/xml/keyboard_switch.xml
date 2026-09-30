@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Only needs to know where the keyboard window is; never reads what's on screen or typed. -->
+<!-- Needs where the keyboard window is (for the ✎ Slate button) and screenshots (only when you
+     tap Ask Claude). Never reads the text on screen or what you type. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowsChanged|typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagRetrieveInteractiveWindows"
     android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="true"
     android:description="@string/switch_service_description"
     android:notificationTimeout="100"
     android:summary="@string/switch_service_summary" />

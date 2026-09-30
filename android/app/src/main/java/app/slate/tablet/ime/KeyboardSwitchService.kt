@@ -2,11 +2,13 @@ package app.slate.tablet.ime
 
 import android.accessibilityservice.AccessibilityService
 import android.content.ComponentName
+import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.provider.Settings
+import android.view.Display
 import android.view.Gravity
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
@@ -15,9 +17,12 @@ import android.widget.TextView
 import android.widget.Toast
 
 /**
- * Puts a small "✎ Slate" button just above any other keyboard (Samsung Keyboard, Gboard…) while it
- * is showing. Tapping it switches straight to Slate Keyboard. Android only lets an accessibility
- * service switch keyboards, which is why this is one; it reads nothing but where the keyboard is.
+ * "Slate helper": two things Android only lets an accessibility service do.
+ * - Puts a small "✎ Slate" button just above any other keyboard (Samsung Keyboard, Gboard…) while
+ *   it is showing; tapping it switches straight to Slate Keyboard. For this it looks only at where
+ *   the keyboard is and which keyboard it is.
+ * - Takes a screenshot when you tap Ask Claude, without Android's screen-capture prompt each time.
+ *   It never captures the screen at any other time.
  */
 class KeyboardSwitchService : AccessibilityService() {
     private var button: TextView? = null
@@ -25,7 +30,30 @@ class KeyboardSwitchService : AccessibilityService() {
 
     private val slateId by lazy { ComponentName(this, SlateKeyboard::class.java).flattenToShortString() }
 
-    override fun onServiceConnected() = update()
+    override fun onServiceConnected() {
+        instance = this
+        update()
+    }
+
+    /** Screenshot of the whole display, or null (on the main thread). Android 11+. */
+    fun screenshot(done: (Bitmap?) -> Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return done(null)
+        try {
+            takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, object : TakeScreenshotCallback {
+                override fun onSuccess(result: ScreenshotResult) {
+                    val hw = Bitmap.wrapHardwareBuffer(result.hardwareBuffer, result.colorSpace)
+                    val bitmap = hw?.copy(Bitmap.Config.ARGB_8888, false)
+                    hw?.recycle()
+                    result.hardwareBuffer.close()
+                    done(bitmap)
+                }
+
+                override fun onFailure(errorCode: Int) = done(null)
+            })
+        } catch (e: SecurityException) {
+            done(null) // not granted screenshots yet (turn the service off and on once after updating)
+        }
+    }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
@@ -36,6 +64,7 @@ class KeyboardSwitchService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         hide()
         super.onDestroy()
     }
@@ -108,5 +137,11 @@ class KeyboardSwitchService : AccessibilityService() {
         if (!ok) {
             Toast.makeText(this, "Turn on Slate Keyboard first (Slate › Slate Keyboard › 1).", Toast.LENGTH_LONG).show()
         }
+    }
+
+    companion object {
+        /** The running service, if it's turned on in Accessibility settings. */
+        @Volatile var instance: KeyboardSwitchService? = null
+            private set
     }
 }

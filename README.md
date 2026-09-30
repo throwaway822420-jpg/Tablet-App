@@ -107,10 +107,11 @@ output mode; **Type it** types it instead.
 A system keyboard for the tablet itself: write in any app's text field and tap Enter. Turn it on
 once from Slate's main screen (Settings › Keyboard list). Works without a PC.
 
-To get to it from Samsung Keyboard (or any other), turn on the **Slate keyboard button**
+To get to it from Samsung Keyboard (or any other), turn on the **Slate helper**
 accessibility service (main screen › Slate Keyboard › 3): a small **✎ Slate** button then sits
 just above any other keyboard while it's open, and one tap switches to Slate Keyboard (Android 11+).
-It only looks at where the keyboard window is and which keyboard it is. ⌨ on Slate Keyboard
+For this it only looks at where the keyboard window is and which keyboard it is. Slate helper also
+lets Ask Claude screenshot the tablet without Android's capture prompt (below). ⌨ on Slate Keyboard
 switches back. On a sideloaded APK, Android may first need *App info › ⋮ › Allow restricted settings*.
 
 ## Screen mode (mirroring and navigation)
@@ -144,7 +145,7 @@ write your question, then tap **Ask**, **Explain**, **Step by step**, **Just a h
   up the first time, then stays in the background); replies stay in the app.
 - **History** keeps every question and answer on the tablet, rendered with maths and diagrams, with
   handwritten **Follow up**, **Export PDF** and **Share Markdown**.
-- **The tablet's own screen**: the "Ask Claude" app shortcut (add it to the S Pen's Air command via *Add shortcuts*), the "Ask Claude" Quick Settings tile (or sharing a screenshot to Slate)
+- **The tablet's own screen**: the "Ask Claude" app shortcut (add it to the S Pen's Air command via *Add shortcuts*), the "Ask Claude" Quick Settings tile (or sharing a screenshot to Slate). With Slate helper on (Android 11+), these capture the screen straight away; otherwise Android asks for screen-capture permission each time. The helper only takes a screenshot when you tap Ask Claude
   asks about whatever is on the tablet. Without a PC these go to Claude Opus 5.5 with your API key.
 - The main screen shows this month's approximate API spend.
 

@@ -34,6 +34,21 @@ class CaptureActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState != null) return
+        val helper = app.slate.tablet.ime.KeyboardSwitchService.instance
+        if (helper != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Slate helper is on: screenshot straight away, no prompt. Wait for Air command or the
+            // Quick Settings panel to close first so it isn't in the picture.
+            Handler(Looper.getMainLooper()).postDelayed({
+                helper.screenshot { bitmap -> if (bitmap != null) onCaptured(bitmap) else askForCapture() }
+            }, 400)
+            return
+        }
+        askForCapture()
+    }
+
+    /** Android's screen-capture prompt (used when Slate helper is off). */
+    private fun askForCapture() {
+        if (isFinishing) return
         val mpm = getSystemService(MediaProjectionManager::class.java)
         @Suppress("DEPRECATION")
         startActivityForResult(mpm.createScreenCaptureIntent(), REQUEST)
