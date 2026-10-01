@@ -5,16 +5,19 @@ import android.media.MediaFormat
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
+import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
 import app.slate.tablet.link.BulkLink
 import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
 /**
- * Hardware H.264 decoding straight onto a Surface, tuned for latency: low-latency mode, frames
- * rendered the moment they're decoded, and anything that goes wrong just waits for the next
- * keyframe (the PC sends one every second).
+ * Hardware H.264 decoding straight onto a Surface, tuned for latency: low-latency mode, a
+ * display-priority output thread, only the newest decoded frame shown (older ones that piled up are
+ * dropped), and anything that goes wrong just waits for the next keyframe (one every second).
  */
 class VideoDecoder(private val onSize: (Int, Int) -> Unit) : BulkLink.VideoSink {
     private val main = Handler(Looper.getMainLooper())
@@ -27,8 +30,19 @@ class VideoDecoder(private val onSize: (Int, Int) -> Unit) : BulkLink.VideoSink 
     private var height = 0
     private var needKeyframe = true
 
-    @Volatile var framesDecoded = 0L
-        private set
+    /** Counters for the stats overlay (read and reset once a second). */
+    class Stats {
+        val received = AtomicLong()
+        val shown = AtomicLong()
+        val late = AtomicLong()      // decoded but replaced by a newer frame before it could be shown
+        val skipped = AtomicLong()   // thrown away waiting for a keyframe
+        /** Sum and count of (time shown − frame timestamp), in tablet-clock µs minus PC-clock µs. */
+        val delaySumUs = AtomicLong()
+        val delayCount = AtomicLong()
+        @Volatile var decoderName = ""
+    }
+
+    val stats = Stats()
 
     fun setSurface(s: Surface?) {
         synchronized(lock) {
@@ -50,11 +64,16 @@ class VideoDecoder(private val onSize: (Int, Int) -> Unit) : BulkLink.VideoSink 
                 }
             }
             val c = codec ?: return
-            if (needKeyframe && !keyframe) return
+            stats.received.incrementAndGet()
+            if (needKeyframe && !keyframe) {
+                stats.skipped.incrementAndGet()
+                return
+            }
             try {
                 val idx = c.dequeueInputBuffer(20_000)
                 if (idx < 0) {
                     needKeyframe = true // decoder is behind: skip ahead to the next keyframe rather than smear
+                    stats.skipped.incrementAndGet()
                     return
                 }
                 val buf = c.getInputBuffer(idx) ?: return
@@ -90,6 +109,9 @@ class VideoDecoder(private val onSize: (Int, Int) -> Unit) : BulkLink.VideoSink 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
                 setInteger(MediaFormat.KEY_PRIORITY, 0) // real-time
                 setInteger(MediaFormat.KEY_OPERATING_RATE, Short.MAX_VALUE.toInt())
+                // Vendor low-latency switches (ignored by decoders that don't know them).
+                setInteger("vendor.qti-ext-dec-low-latency.enable", 1)
+                setInteger("vendor.low-latency.enable", 1)
             }
             val c = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
             c.configure(format, s, null, 0)
@@ -101,6 +123,7 @@ class VideoDecoder(private val onSize: (Int, Int) -> Unit) : BulkLink.VideoSink 
             running = true
             output = thread(name = "slate-video-out", isDaemon = true) { drain(c) }
             main.post { onSize(w, h) }
+            stats.decoderName = c.name
             Log.i(TAG, "Decoding ${w}x$h with ${c.name}")
             true
         } catch (e: Exception) {
@@ -110,14 +133,26 @@ class VideoDecoder(private val onSize: (Int, Int) -> Unit) : BulkLink.VideoSink 
     }
 
     private fun drain(c: MediaCodec) {
+        Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_DISPLAY)
         val info = MediaCodec.BufferInfo()
         try {
             while (running) {
-                val idx = c.dequeueOutputBuffer(info, 50_000)
-                if (idx >= 0) {
-                    c.releaseOutputBuffer(idx, true) // show it now; no frame pacing, lowest latency
-                    framesDecoded++
+                var idx = c.dequeueOutputBuffer(info, 50_000)
+                if (idx < 0) continue
+                var pts = info.presentationTimeUs
+                // If more frames are already waiting, skip straight to the newest one.
+                while (true) {
+                    val next = c.dequeueOutputBuffer(info, 0)
+                    if (next < 0) break
+                    c.releaseOutputBuffer(idx, false)
+                    stats.late.incrementAndGet()
+                    idx = next
+                    pts = info.presentationTimeUs
                 }
+                c.releaseOutputBuffer(idx, System.nanoTime()) // show it now; no frame pacing
+                stats.shown.incrementAndGet()
+                stats.delaySumUs.addAndGet(SystemClock.elapsedRealtimeNanos() / 1000 - pts)
+                stats.delayCount.incrementAndGet()
             }
         } catch (e: IllegalStateException) {
             // Released while waiting.

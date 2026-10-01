@@ -17,6 +17,8 @@ internal sealed class MirrorService : IDisposable
     private readonly SemaphoreSlim _startLock = new(1, 1);
     private readonly System.Threading.Timer _cursorTimer;
     private readonly TextFocusWatcher _focus;
+    private readonly System.Threading.Timer _statsTimer;
+    private int _framesSent, _framesDropped;
     private ScreenStreamer? _streamer;
     private CancellationTokenSource? _startCts;
     private volatile Screen? _screen;
@@ -42,6 +44,7 @@ internal sealed class MirrorService : IDisposable
         _bulk.FrameReceived += OnFrame;
         _cursorTimer = new System.Threading.Timer(_ => SendCursor(), null, Timeout.Infinite, Timeout.Infinite);
         // Tells the tablet when a text field gets focus, so it can bring up the handwriting pad.
+        _statsTimer = new System.Threading.Timer(_ => SendStats(), null, Timeout.Infinite, Timeout.Infinite);
         _focus = new TextFocusWatcher(editable => _bulk.Send(new JsonObject { ["t"] = "textfocus", ["editable"] = editable }));
     }
 
@@ -89,7 +92,8 @@ internal sealed class MirrorService : IDisposable
         {
             case "stream.start":
                 _usb = o.Bool("usb");
-                _ = StartStreamAsync(o.Str("monitor"), o.Int("fps", 60), o.Int("bitrate", 0));
+                int maxW = o.Int("maxw", 0), maxH = o.Int("maxh", 0);
+                _ = StartStreamAsync(o.Str("monitor"), o.Int("fps", 60), o.Int("bitrate", 0), maxW > 0 && maxH > 0 ? (maxW, maxH) : null);
                 break;
             case "stream.stop":
                 StopStream("Stopped by tablet");
@@ -102,6 +106,10 @@ internal sealed class MirrorService : IDisposable
                 break;
             case "scroll":
                 if (Point(o) is { } sp) _input.Scroll(sp.X, sp.Y, o.Num("dx"), o.Num("dy"));
+                break;
+            case "clock":
+                // The tablet syncs to the frame clock to measure how late frames arrive.
+                _bulk.Send(new JsonObject { ["t"] = "clock", ["c"] = o.Num("c"), ["pc"] = ScreenStreamer.NowMicros });
                 break;
             case "keys":
                 if (!_input.Keys(o.Str("combo"))) Log.Info($"Unknown shortcut '{o.Str("combo")}'");
@@ -146,7 +154,7 @@ internal sealed class MirrorService : IDisposable
         if (contacts.Any(c => c.Phase == TouchPhase.Up)) _focus.Poke();
     }
 
-    private async Task StartStreamAsync(string monitorId, int fps, int bitrate)
+    private async Task StartStreamAsync(string monitorId, int fps, int bitrate, (int W, int H)? maxSize)
     {
         _startCts?.Cancel();
         var cts = _startCts = new CancellationTokenSource();
@@ -183,13 +191,17 @@ internal sealed class MirrorService : IDisposable
             sources.Add(new CaptureSource.Gdi(b.X, b.Y, b.Width & ~1, b.Height & ~1, Math.Min(fps, 30)));
 
             SendState("starting", $"Starting the screen stream…");
-            var streamer = new ScreenStreamer(ffmpeg, (au, key, pts) => _bulk.SendVideo(au, key, pts));
+            var streamer = new ScreenStreamer(ffmpeg, (au, key, pts) =>
+            {
+                if (_bulk.SendVideo(au, key, pts)) Interlocked.Increment(ref _framesSent);
+                else Interlocked.Increment(ref _framesDropped);
+            });
             streamer.Failed += why =>
             {
                 Log.Info($"Screen stream stopped: {why}");
-                if (ReferenceEquals(_streamer, streamer)) _ = StartStreamAsync(screen.DeviceName, fps, bitrate); // restart once more
+                if (ReferenceEquals(_streamer, streamer)) _ = StartStreamAsync(screen.DeviceName, fps, bitrate, maxSize); // restart once more
             };
-            var err = await streamer.StartAsync(sources, FfmpegArgs.Order(_settings.PreferredEncoder), bitrate, cts.Token);
+            var err = await streamer.StartAsync(sources, FfmpegArgs.Order(_settings.PreferredEncoder), bitrate, cts.Token, maxSize);
             if (err is not null)
             {
                 streamer.Dispose();
@@ -205,18 +217,24 @@ internal sealed class MirrorService : IDisposable
                 _saveSettings();
             }
             var src = streamer.Source!;
+            var (ow, oh) = streamer.OutputSize;
+            string capture = src is CaptureSource.Dda ? "DXGI" : "GDI (slow)";
             _bulk.Send(new JsonObject
             {
                 ["t"] = "stream",
                 ["state"] = "running",
-                ["w"] = src.Width,
-                ["h"] = src.Height,
+                ["w"] = ow,
+                ["h"] = oh,
                 ["fps"] = src.Fps,
                 ["encoder"] = streamer.Encoder.ToString(),
+                ["capture"] = capture,
                 ["monitor"] = screen.DeviceName,
-                ["message"] = $"{src.Width}×{src.Height} · {src.Fps} fps · {streamer.Encoder}",
+                ["message"] = $"{ow}×{oh} · {src.Fps} fps · {streamer.Encoder} · {capture}",
             });
             _cursorTimer.Change(0, 33);
+            Interlocked.Exchange(ref _framesSent, 0);
+            Interlocked.Exchange(ref _framesDropped, 0);
+            _statsTimer.Change(1000, 1000);
             _focus.Start();
             StatusChanged?.Invoke($"Mirroring {screen.DeviceName} ({streamer.Encoder})");
             MirrorChanged?.Invoke();
@@ -252,6 +270,7 @@ internal sealed class MirrorService : IDisposable
     private void StopStreamCore()
     {
         _cursorTimer.Change(Timeout.Infinite, Timeout.Infinite);
+        _statsTimer.Change(Timeout.Infinite, Timeout.Infinite);
         _focus.Stop();
         var s = _streamer;
         _streamer = null;
@@ -261,6 +280,24 @@ internal sealed class MirrorService : IDisposable
             _screen = null;
             MirrorChanged?.Invoke();
         }
+    }
+
+    /// <summary>Once a second while streaming: frames sent and dropped, for the tablet's stats overlay.</summary>
+    private void SendStats()
+    {
+        var s = _streamer;
+        if (s?.Source is not { } src) return;
+        _bulk.Send(new JsonObject
+        {
+            ["t"] = "stats",
+            ["sent"] = Interlocked.Exchange(ref _framesSent, 0),
+            ["dropped"] = Interlocked.Exchange(ref _framesDropped, 0),
+            ["encoder"] = s.Encoder?.ToString(),
+            ["capture"] = src is CaptureSource.Dda ? "DXGI" : "GDI (slow)",
+            ["w"] = s.OutputSize.W,
+            ["h"] = s.OutputSize.H,
+            ["fps"] = src.Fps,
+        });
     }
 
     private void SendCursor()
@@ -281,6 +318,7 @@ internal sealed class MirrorService : IDisposable
     {
         StopStream("PC app closed");
         _cursorTimer.Dispose();
+        _statsTimer.Dispose();
         _focus.Dispose();
         _input.Dispose();
     }

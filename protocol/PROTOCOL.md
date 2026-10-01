@@ -146,9 +146,11 @@ JSON types:
 |---|---|---|
 | `welcome` | PC → tablet | `pc`, `monitors: [{id, name, w, h, primary}]`, `current` |
 | `denied` | PC → tablet | wrong pairing code |
-| `stream.start` | tablet → PC | `monitor` (id or ""), `fps`, `usb`, optional `bitrate` |
+| `stream.start` | tablet → PC | `monitor` (id or ""), `fps`, `usb`, optional `bitrate`, optional `maxw, maxh` (scale the picture down to fit, keeping its shape; either orientation) |
 | `stream.stop` | tablet → PC | |
-| `stream` | PC → tablet | `state`: setup / starting / running / stopped / error, `message`, and when running `w, h, fps, encoder, monitor` |
+| `stream` | PC → tablet | `state`: setup / starting / running / stopped / error, `message`, and when running `w, h` (size sent), `fps, encoder, capture` (`DXGI` or `GDI (slow)`), `monitor` |
+| `stats` | PC → tablet | Once a second while streaming: `sent`, `dropped` (frames in the last second), `encoder, capture, w, h, fps` |
+| `clock` | both | Tablet sends `c` (its clock, µs); the PC echoes `c` with `pc`, its frame-timestamp clock (µs), so the tablet can measure frame delay |
 | `cursor` | PC → tablet | `x, y` (0..1 of the mirrored monitor) |
 | `textfocus` | PC → tablet | `editable` (bool). Sent while streaming when keyboard focus moves into (true) or out of (false) a text field, per UI Automation. The tablet opens its handwriting pad only if the user touched the picture in the last 2.5 s. Password fields count as not editable. |
 | `mouse` | tablet → PC | `action`: move / down / up / click / dblclick / rightclick, `x, y` |

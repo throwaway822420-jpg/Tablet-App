@@ -82,6 +82,16 @@ class Prefs(context: Context) {
         set(v) = p.edit().putString("mirror_monitor", v).apply()
 
     /** Stream bitrate in bits/s; 0 = automatic (30 Mb/s USB, 15 Mb/s Wi-Fi). */
+    /** Mirroring resolution: 0 = the PC's full resolution, 1 = matched to this tablet's screen, 2 = 1080p. */
+    var mirrorResolution: Int
+        get() = p.getInt("mirror_resolution", 1)
+        set(v) = p.edit().putInt("mirror_resolution", v).apply()
+
+    /** Show frame rate, delay, encoder and capture method over the mirrored screen. */
+    var showStreamStats: Boolean
+        get() = p.getBoolean("show_stream_stats", false)
+        set(v) = p.edit().putBoolean("show_stream_stats", v).apply()
+
     var mirrorBitrate: Int
         get() = p.getInt("mirror_bitrate", 0)
         set(v) = p.edit().putInt("mirror_bitrate", v).apply()

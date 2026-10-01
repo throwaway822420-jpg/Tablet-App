@@ -45,7 +45,9 @@ public static class FfmpegArgs
     /// second (so a dropped frame heals quickly), constant bitrate, and an access unit delimiter
     /// before every frame so Slate can split frames without parsing slices.
     /// </summary>
-    public static List<string> Build(CaptureSource src, VideoEncoder enc, int bitrate)
+    /// <param name="scale">Output size when smaller than the capture (e.g. matched to the tablet), or null for full size.</param>
+    /// <param name="gpuScale">Scale on the GPU (scale_d3d11) when the frames are there; false scales in memory instead.</param>
+    public static List<string> Build(CaptureSource src, VideoEncoder enc, int bitrate, (int W, int H)? scale = null, bool gpuScale = true)
     {
         var a = new List<string> { "-hide_banner", "-loglevel", "warning", "-nostdin" };
         bool gpuFrames = false;
@@ -78,6 +80,16 @@ public static class FfmpegArgs
             (true, _) => "hwdownload,format=bgra,format=nv12",
             (false, _) => "format=nv12",
         };
+        if (scale is { } s)
+        {
+            string w = s.W.ToString(CultureInfo.InvariantCulture), h = s.H.ToString(CultureInfo.InvariantCulture);
+            if (gpuFrames && gpuScale)
+                vf = $"scale_d3d11=width={w}:height={h}" + (vf is null ? "" : "," + vf);
+            else if (gpuFrames)
+                vf = $"hwdownload,format=bgra,scale={w}:{h}:flags=bilinear,format=nv12";
+            else
+                vf = $"scale={w}:{h}:flags=bilinear,format=nv12";
+        }
         if (vf is not null) a.AddRange(new[] { "-vf", vf });
 
         string b = bitrate.ToString(CultureInfo.InvariantCulture);
@@ -94,6 +106,20 @@ public static class FfmpegArgs
         a.AddRange(new[] { "-b:v", b, "-maxrate", b, "-bufsize", buf, "-g", gop, "-bf", "0" });
         a.AddRange(new[] { "-bsf:v", "h264_metadata=aud=insert", "-an", "-flush_packets", "1", "-f", "h264", "pipe:1" });
         return a;
+    }
+
+    /// <summary>
+    /// The largest size with the capture's shape that fits in maxW × maxH (either way round, so a
+    /// portrait limit still fits a landscape screen), in even numbers; null if no shrinking is needed.
+    /// </summary>
+    public static (int W, int H)? FitSize(int w, int h, int maxW, int maxH)
+    {
+        if (w <= 0 || h <= 0 || maxW <= 0 || maxH <= 0) return null;
+        int longMax = Math.Max(maxW, maxH), shortMax = Math.Min(maxW, maxH);
+        double f = Math.Min((double)longMax / Math.Max(w, h), (double)shortMax / Math.Min(w, h));
+        if (f >= 0.999) return null;
+        int ow = Math.Max(2, (int)Math.Round(w * f / 2) * 2), oh = Math.Max(2, (int)Math.Round(h * f / 2) * 2);
+        return (ow, oh);
     }
 
     public static string ToCommandLine(IEnumerable<string> args) =>
@@ -172,7 +198,7 @@ public sealed class ScreenStreamer : IDisposable
     private readonly string _ffmpeg;
     private readonly Action<byte[], bool, long> _onFrame;
     private Process? _proc;
-    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private static readonly Stopwatch Clock = Stopwatch.StartNew();
     private readonly Queue<string> _stderr = new();
     private volatile bool _stopping;
 
@@ -182,39 +208,55 @@ public sealed class ScreenStreamer : IDisposable
         _onFrame = onFrame;
     }
 
+    /// <summary>Microseconds on the clock that stamps each frame; the tablet syncs to it to measure delay.</summary>
+    public static long NowMicros => Clock.ElapsedTicks * 1_000_000 / Stopwatch.Frequency;
+
     public VideoEncoder? Encoder { get; private set; }
     public CaptureSource? Source { get; private set; }
+
+    /// <summary>The size actually sent (the capture size unless scaled down).</summary>
+    public (int W, int H) OutputSize { get; private set; }
 
     /// <summary>Raised when ffmpeg stops unexpectedly, with its last error lines.</summary>
     public event Action<string>? Failed;
 
     /// <summary>Tries each source (first working one wins) with each encoder in order.</summary>
     /// <returns>A description of the failure, or null on success.</returns>
-    public async Task<string?> StartAsync(IEnumerable<CaptureSource> sources, IReadOnlyList<VideoEncoder> encoders, int bitrate, CancellationToken ct)
+    /// <param name="maxSize">Scale the picture down to fit this (e.g. the tablet's screen), or null for full size.</param>
+    public async Task<string?> StartAsync(IEnumerable<CaptureSource> sources, IReadOnlyList<VideoEncoder> encoders, int bitrate, CancellationToken ct,
+        (int W, int H)? maxSize = null)
     {
         Stop();
         string lastError = "No capture source.";
         foreach (var src in sources)
         {
+            var scale = maxSize is { } m ? FfmpegArgs.FitSize(src.Width, src.Height, m.W, m.H) : null;
+            // GPU frames are scaled on the GPU if this ffmpeg can (scale_d3d11), else in memory.
+            var gpuOptions = scale is not null && src is CaptureSource.Dda ? new[] { true, false } : new[] { true };
             foreach (var enc in encoders)
             {
-                ct.ThrowIfCancellationRequested();
-                var err = await TryStartAsync(src, enc, bitrate, ct);
-                if (err is null)
+                foreach (bool gpuScale in gpuOptions)
                 {
-                    Encoder = enc;
-                    Source = src;
-                    Log.Info($"Screen stream: {src} with {enc} at {bitrate / 1_000_000.0:0.#} Mb/s");
-                    return null;
+                    ct.ThrowIfCancellationRequested();
+                    var err = await TryStartAsync(src, enc, bitrate, scale, gpuScale, ct);
+                    if (err is null)
+                    {
+                        Encoder = enc;
+                        Source = src;
+                        OutputSize = scale ?? (src.Width, src.Height);
+                        Log.Info($"Screen stream: {src} with {enc} at {bitrate / 1_000_000.0:0.#} Mb/s, sent at {OutputSize.W}x{OutputSize.H}" +
+                            (scale is null ? "" : gpuScale && src is CaptureSource.Dda ? " (GPU scaling)" : " (scaled in memory)"));
+                        return null;
+                    }
+                    Log.Info($"Screen stream: {enc} on {src.GetType().Name} didn't start: {err}");
+                    lastError = err;
                 }
-                Log.Info($"Screen stream: {enc} on {src.GetType().Name} didn't start: {err}");
-                lastError = err;
             }
         }
         return lastError;
     }
 
-    private async Task<string?> TryStartAsync(CaptureSource src, VideoEncoder enc, int bitrate, CancellationToken ct)
+    private async Task<string?> TryStartAsync(CaptureSource src, VideoEncoder enc, int bitrate, (int W, int H)? scale, bool gpuScale, CancellationToken ct)
     {
         var psi = new ProcessStartInfo(_ffmpeg)
         {
@@ -223,7 +265,7 @@ public sealed class ScreenStreamer : IDisposable
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var arg in FfmpegArgs.Build(src, enc, bitrate)) psi.ArgumentList.Add(arg);
+        foreach (var arg in FfmpegArgs.Build(src, enc, bitrate, scale, gpuScale)) psi.ArgumentList.Add(arg);
         var proc = Process.Start(psi);
         if (proc is null) return "ffmpeg didn't start";
         lock (_stderr) _stderr.Clear();
@@ -263,7 +305,7 @@ public sealed class ScreenStreamer : IDisposable
                         started = true;
                         firstKey.TrySetResult(true);
                     }
-                    if (ReferenceEquals(_proc, proc) || !_stopping) _onFrame(au.Data, au.Keyframe, _clock.ElapsedTicks * 1_000_000 / Stopwatch.Frequency);
+                    if (ReferenceEquals(_proc, proc) || !_stopping) _onFrame(au.Data, au.Keyframe, NowMicros);
                 }
             }
         }

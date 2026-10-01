@@ -139,6 +139,49 @@ public class BulkTests
     }
 
     [Fact]
+    public void FitsTheOutputToTheTablet()
+    {
+        Assert.Equal((2560, 1600), FfmpegArgs.FitSize(2880, 1800, 2560, 1600));
+        Assert.Equal((2560, 1600), FfmpegArgs.FitSize(2880, 1800, 1600, 2560)); // a portrait limit still fits
+        Assert.Equal((1728, 1080), FfmpegArgs.FitSize(2880, 1800, 1920, 1080)); // keeps 16:10, height-limited
+        Assert.Equal((1920, 1080), FfmpegArgs.FitSize(3840, 2160, 1920, 1080));
+        Assert.Null(FfmpegArgs.FitSize(1920, 1080, 2560, 1600));                 // never scales up
+        Assert.Null(FfmpegArgs.FitSize(1920, 1080, 0, 0));
+        var odd = FfmpegArgs.FitSize(1366, 768, 1000, 1000)!.Value;
+        Assert.True(odd.W % 2 == 0 && odd.H % 2 == 0);
+    }
+
+    [Fact]
+    public void ScalesOnTheGpuOrInMemory()
+    {
+        var dda = new CaptureSource.Dda(0, 0, 2880, 1800, 60);
+        var gpu = FfmpegArgs.ToCommandLine(FfmpegArgs.Build(dda, VideoEncoder.Nvenc, 20_000_000, (1920, 1200)));
+        Assert.Contains("-vf scale_d3d11=width=1920:height=1200", gpu);
+        var gpuQsv = FfmpegArgs.ToCommandLine(FfmpegArgs.Build(dda, VideoEncoder.Qsv, 20_000_000, (1920, 1200)));
+        Assert.Contains("-vf scale_d3d11=width=1920:height=1200,hwmap=derive_device=qsv,format=qsv", gpuQsv);
+        var mem = FfmpegArgs.ToCommandLine(FfmpegArgs.Build(dda, VideoEncoder.Nvenc, 20_000_000, (1920, 1200), gpuScale: false));
+        Assert.Contains("-vf hwdownload,format=bgra,scale=1920:1200:flags=bilinear,format=nv12", mem);
+        var gdi = FfmpegArgs.ToCommandLine(FfmpegArgs.Build(new CaptureSource.Gdi(0, 0, 2880, 1800, 30), VideoEncoder.X264, 8_000_000, (1920, 1200)));
+        Assert.Contains("-vf scale=1920:1200:flags=bilinear,format=nv12", gdi);
+    }
+
+    [Fact]
+    public async Task StreamerScalesDown()
+    {
+        var ffmpeg = TestFfmpeg();
+        if (ffmpeg is null) return;
+        int frames = 0;
+        using var streamer = new ScreenStreamer(ffmpeg, (_, _, _) => Interlocked.Increment(ref frames));
+        var err = await streamer.StartAsync(new CaptureSource[] { new CaptureSource.Test(1600, 1000, 30) },
+            new[] { VideoEncoder.X264 }, 4_000_000, CancellationToken.None, maxSize: (800, 800));
+        Assert.Null(err);
+        Assert.Equal((800, 500), streamer.OutputSize);
+        await Task.Delay(1000);
+        streamer.Stop();
+        Assert.True(frames >= 15, $"only {frames} frames");
+    }
+
+    [Fact]
     public async Task StreamerFallsBackToAWorkingEncoderAndStartsWithAKeyframe()
     {
         var ffmpeg = TestFfmpeg();

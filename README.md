@@ -128,6 +128,9 @@ switches back. On a sideloaded APK, Android may first need *App info › ⋮ ›
   ignores touches while you write; **Enter** types what you wrote, ↵/⌫/Space press the real keys,
   **✕ Screen** (or Back) goes back to navigating. The PC spots text fields with UI Automation
   (password fields are skipped). Turn it off, or open the pad by hand, in ⋯ View.
+- **Resolution** (⋯ View): *Match this tablet* (default) scales the PC's picture down to the tablet's
+  screen, *1080p* is lightest; *Stream stats* shows fps sent/received/shown, the delay from the PC's
+  encoder to the tablet's screen, encoder and capture method.
 - ⋯ View: fit, shrink, zoom, actual pixels, follow the cursor when zoomed, mini-map, monitor and
   quality. Shortcut buttons down the left edge are editable on the main screen.
 

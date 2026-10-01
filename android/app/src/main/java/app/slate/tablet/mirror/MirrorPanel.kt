@@ -35,6 +35,19 @@ class MirrorPanel(
 ) : FrameLayout(context) {
     val mirror = MirrorView(context)
     private val status = TextView(context)
+    private val statsView = TextView(context)
+    private var pcStats: JSONObject? = null
+    /** PC frame clock minus tablet clock (µs), from the last clock sync; null until synced. */
+    private var clockOffsetUs: Long? = null
+    private var bestRttUs = Long.MAX_VALUE
+    private val statsTick = object : Runnable {
+        override fun run() {
+            if (!active || !prefs.showStreamStats) return
+            BulkLink.send(JSONObject().put("t", "clock").put("c", nowUs()))
+            showStats()
+            postDelayed(this, 1000)
+        }
+    }
     private val shortcuts = LinearLayout(context)
     private val shortcutScroll = ScrollView(context)
     private var active = false
@@ -140,6 +153,8 @@ class MirrorPanel(
             "stream" -> onStream(o)
             "cursor" -> mirror.onCursor(o.optDouble("x").toFloat(), o.optDouble("y").toFloat())
             "textfocus" -> onTextFocus(o.optBoolean("editable"))
+            "stats" -> pcStats = o
+            "clock" -> onClock(o)
         }
     }
 
@@ -166,6 +181,16 @@ class MirrorPanel(
             setBackgroundColor(Color.argb(170, 0, 0, 0))
         }
         addView(status, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+
+        statsView.apply {
+            setTextColor(Color.rgb(140, 240, 170))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            typeface = android.graphics.Typeface.MONOSPACE
+            setPadding(dp(10), dp(6), dp(10), dp(6))
+            setBackgroundColor(Color.argb(170, 0, 0, 0))
+            visibility = View.GONE
+        }
+        addView(statsView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(8) })
 
         val more = WritePanel.makeButton(context, "⋯ View") {}
         more.setOnClickListener { showMenu(more) }
@@ -194,11 +219,65 @@ class MirrorPanel(
         BulkLink.addBlobListener(onShot)
         BulkLink.addStateListener(onBulk)
         showStatus("Starting the screen stream…")
+        startStats()
+    }
+
+    private fun startStats() {
+        removeCallbacks(statsTick)
+        resetStats()
+        statsView.visibility = if (prefs.showStreamStats) View.VISIBLE else View.GONE
+        if (prefs.showStreamStats) post(statsTick)
+    }
+
+    private fun resetStats() {
+        pcStats = null
+        clockOffsetUs = null
+        bestRttUs = Long.MAX_VALUE
+        mirror.decoder.stats.apply { received.set(0); shown.set(0); late.set(0); skipped.set(0); delaySumUs.set(0); delayCount.set(0) }
+    }
+
+    private fun nowUs() = android.os.SystemClock.elapsedRealtimeNanos() / 1000
+
+    /** Clock sync: keep the offset from the fastest round trip seen, the least distorted by queuing. */
+    private fun onClock(o: JSONObject) {
+        val sent = o.optLong("c")
+        val rtt = nowUs() - sent
+        if (rtt < 0 || rtt > bestRttUs * 2 + 20_000) return
+        if (rtt <= bestRttUs) bestRttUs = rtt
+        if (rtt == bestRttUs || clockOffsetUs == null) clockOffsetUs = o.optLong("pc") - (sent + rtt / 2)
+    }
+
+    private fun showStats() {
+        val s = mirror.decoder.stats
+        val received = s.received.getAndSet(0)
+        val shown = s.shown.getAndSet(0)
+        val late = s.late.getAndSet(0)
+        val skipped = s.skipped.getAndSet(0)
+        val count = s.delayCount.getAndSet(0)
+        val sum = s.delaySumUs.getAndSet(0)
+        val pc = pcStats
+        val delay = clockOffsetUs?.takeIf { count > 0 }?.let { off -> ((sum / count + off) / 1000).coerceAtLeast(0) }
+        statsView.text = buildString {
+            if (pc != null) {
+                append("PC  ").append(pc.optInt("w")).append('×').append(pc.optInt("h"))
+                append(" · ").append(pc.optString("encoder")).append(" · ").append(pc.optString("capture"))
+                append("\nPC sent ").append(pc.optInt("sent")).append(" fps (target ").append(pc.optInt("fps")).append(")")
+                if (pc.optInt("dropped") > 0) append(" · link dropped ").append(pc.optInt("dropped"))
+                append('\n')
+            } else append("PC  waiting for stats (update Slate on the PC?)\n")
+            append("Tablet got ").append(received).append(" · shown ").append(shown).append(" fps")
+            if (late > 0) append(" · late ").append(late)
+            if (skipped > 0) append(" · skipped ").append(skipped)
+            append("\nDelay (PC encoder → tablet screen): ").append(delay?.let { "$it ms" } ?: "measuring…")
+            append(" · USB/Wi-Fi round trip ").append(if (bestRttUs == Long.MAX_VALUE) "…" else "${bestRttUs / 1000} ms")
+            if (s.decoderName.isNotEmpty()) append("\nDecoder ").append(s.decoderName)
+        }
     }
 
     fun stop() {
         if (!active) return
         closePad()
+        removeCallbacks(statsTick)
         active = false
         running = false
         mirror.capture.release()
@@ -212,8 +291,25 @@ class MirrorPanel(
         val o = JSONObject().put("t", "stream.start").put("fps", 60)
             .put("usb", SlateLink.status.transport == Transport.USB)
             .put("monitor", prefs.mirrorMonitor)
+        maxSize()?.let { (w, h) -> o.put("maxw", w).put("maxh", h) }
         if (prefs.mirrorBitrate > 0) o.put("bitrate", prefs.mirrorBitrate)
         if (BulkLink.send(o)) showStatus("Starting the screen stream…")
+    }
+
+    /** The largest picture worth sending, from the Resolution setting; null for the PC's full resolution. */
+    private fun maxSize(): Pair<Int, Int>? = when (prefs.mirrorResolution) {
+        1 -> {
+            val m = android.util.DisplayMetrics()
+            @Suppress("DEPRECATION")
+            val d = display
+            if (d == null) null else {
+                @Suppress("DEPRECATION")
+                d.getRealMetrics(m)
+                maxOf(m.widthPixels, m.heightPixels) to minOf(m.widthPixels, m.heightPixels)
+            }
+        }
+        2 -> 1920 to 1080
+        else -> null
     }
 
     private fun onStream(o: JSONObject) {
@@ -263,6 +359,10 @@ class MirrorPanel(
             v.reset(v.frameW / ((d[2] - d[0]) / v.scale))
             mirror.applyTransform(); true
         }
+        m.add("Stream stats (fps, delay)").apply {
+            isCheckable = true; isChecked = prefs.showStreamStats
+            setOnMenuItemClickListener { prefs.showStreamStats = !prefs.showStreamStats; startStats(); true }
+        }
         m.add("Fingers: Windows touch").apply {
             isCheckable = true; isChecked = prefs.windowsTouch
             setOnMenuItemClickListener { prefs.windowsTouch = !prefs.windowsTouch; applyPrefs(); true }
@@ -289,6 +389,13 @@ class MirrorPanel(
                     prefs.mirrorMonitor = mon.optString("id")
                     requestStream(); true
                 }
+            }
+        }
+        val res = m.addSubMenu("Resolution")
+        for ((label, value) in listOf("Match this tablet (recommended)" to 1, "1080p (fastest)" to 2, "PC's full resolution" to 0)) {
+            res.add(label).apply {
+                isCheckable = true; isChecked = prefs.mirrorResolution == value
+                setOnMenuItemClickListener { prefs.mirrorResolution = value; requestStream(); true }
             }
         }
         val q = m.addSubMenu("Quality")
