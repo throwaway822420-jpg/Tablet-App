@@ -184,6 +184,10 @@ without the hardware; the rest needs a Windows PC and the tablet.
   (*Settings › Advanced features › S Pen*). The app says so.
 - **Latency:** the round trip from PING/PONG shows on the tablet's status line, in the tray
   tooltip and in the settings window. Target is under 20 ms on USB.
+- **Laptops with two GPUs** (Intel + NVIDIA/AMD): fast DXGI capture only works from the GPU the
+  screen is wired to. Slate tries every adapter, and if that fails sets Windows' graphics preference
+  for its own ffmpeg.exe to *Power saving* (Settings › Display › Graphics) and encodes with Intel Quick
+  Sync, or copies frames to the other GPU's encoder. The stream stats show `DXGI` when this works.
 - **Scaling:** the PC app is per-monitor DPI aware (PerMonitorV2) and maps in physical pixels.
   Check the mapping on the laptop panel at 125% and 150%.
 

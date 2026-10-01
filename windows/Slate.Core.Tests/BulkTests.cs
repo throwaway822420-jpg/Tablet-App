@@ -159,10 +159,19 @@ public class BulkTests
         Assert.Contains("-vf scale_d3d11=width=1920:height=1200", gpu);
         var gpuQsv = FfmpegArgs.ToCommandLine(FfmpegArgs.Build(dda, VideoEncoder.Qsv, 20_000_000, (1920, 1200)));
         Assert.Contains("-vf scale_d3d11=width=1920:height=1200,hwmap=derive_device=qsv,format=qsv", gpuQsv);
-        var mem = FfmpegArgs.ToCommandLine(FfmpegArgs.Build(dda, VideoEncoder.Nvenc, 20_000_000, (1920, 1200), gpuScale: false));
+        var mem = FfmpegArgs.ToCommandLine(FfmpegArgs.Build(dda, VideoEncoder.Nvenc, 20_000_000, (1920, 1200), onGpu: false));
         Assert.Contains("-vf hwdownload,format=bgra,scale=1920:1200:flags=bilinear,format=nv12", mem);
+        var copied = FfmpegArgs.ToCommandLine(FfmpegArgs.Build(dda, VideoEncoder.Nvenc, 20_000_000, onGpu: false));
+        Assert.Contains("-vf hwdownload,format=bgra,format=nv12", copied); // NVENC on another GPU than the screen
         var gdi = FfmpegArgs.ToCommandLine(FfmpegArgs.Build(new CaptureSource.Gdi(0, 0, 2880, 1800, 30), VideoEncoder.X264, 8_000_000, (1920, 1200)));
         Assert.Contains("-vf scale=1920:1200:flags=bilinear,format=nv12", gdi);
+    }
+
+    [Fact]
+    public void TellsCaptureFailuresFromEncoderFailures()
+    {
+        Assert.True(ScreenStreamer.IsCaptureFailure("[Parsed_ddagrab_0 @ 01] Selected output not supported | Error opening input file ddagrab=output_idx=0"));
+        Assert.False(ScreenStreamer.IsCaptureFailure("[h264_nvenc @ 01] No capable devices found | Error while opening encoder"));
     }
 
     [Fact]

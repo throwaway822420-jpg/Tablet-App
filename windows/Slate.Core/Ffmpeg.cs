@@ -46,8 +46,12 @@ public static class FfmpegArgs
     /// before every frame so Slate can split frames without parsing slices.
     /// </summary>
     /// <param name="scale">Output size when smaller than the capture (e.g. matched to the tablet), or null for full size.</param>
-    /// <param name="gpuScale">Scale on the GPU (scale_d3d11) when the frames are there; false scales in memory instead.</param>
-    public static List<string> Build(CaptureSource src, VideoEncoder enc, int bitrate, (int W, int H)? scale = null, bool gpuScale = true)
+    /// <param name="onGpu">
+    /// Keep captured GPU frames on the GPU (zero-copy into hardware encoders, scale_d3d11 for scaling).
+    /// False copies them to memory first: needed when the encoder is on a different GPU from the
+    /// screen (laptops with Intel graphics plus NVIDIA/AMD).
+    /// </param>
+    public static List<string> Build(CaptureSource src, VideoEncoder enc, int bitrate, (int W, int H)? scale = null, bool onGpu = true)
     {
         var a = new List<string> { "-hide_banner", "-loglevel", "warning", "-nostdin" };
         bool gpuFrames = false;
@@ -75,6 +79,7 @@ public static class FfmpegArgs
         // Frame format: hardware encoders take the GPU frames directly; the others need them in memory.
         string? vf = (gpuFrames, enc) switch
         {
+            (true, _) when !onGpu => "hwdownload,format=bgra,format=nv12",
             (true, VideoEncoder.Nvenc or VideoEncoder.Amf) => null,
             (true, VideoEncoder.Qsv) => "hwmap=derive_device=qsv,format=qsv",
             (true, _) => "hwdownload,format=bgra,format=nv12",
@@ -83,7 +88,7 @@ public static class FfmpegArgs
         if (scale is { } s)
         {
             string w = s.W.ToString(CultureInfo.InvariantCulture), h = s.H.ToString(CultureInfo.InvariantCulture);
-            if (gpuFrames && gpuScale)
+            if (gpuFrames && onGpu)
                 vf = $"scale_d3d11=width={w}:height={h}" + (vf is null ? "" : "," + vf);
             else if (gpuFrames)
                 vf = $"hwdownload,format=bgra,scale={w}:{h}:flags=bilinear,format=nv12";
@@ -231,32 +236,44 @@ public sealed class ScreenStreamer : IDisposable
         foreach (var src in sources)
         {
             var scale = maxSize is { } m ? FfmpegArgs.FitSize(src.Width, src.Height, m.W, m.H) : null;
-            // GPU frames are scaled on the GPU if this ffmpeg can (scale_d3d11), else in memory.
-            var gpuOptions = scale is not null && src is CaptureSource.Dda ? new[] { true, false } : new[] { true };
-            foreach (var enc in encoders)
+            // GPU frames: first every encoder zero-copy on the GPU, then every encoder via memory
+            // (works when the encoder is on another GPU, at the cost of a copy).
+            var modes = src is CaptureSource.Dda ? new[] { true, false } : new[] { true };
+            var tried = new HashSet<string>();
+            bool captureFailed = false;
+            foreach (bool onGpu in modes)
             {
-                foreach (bool gpuScale in gpuOptions)
+                foreach (var enc in encoders)
                 {
                     ct.ThrowIfCancellationRequested();
-                    var err = await TryStartAsync(src, enc, bitrate, scale, gpuScale, ct);
+                    if (!tried.Add(FfmpegArgs.ToCommandLine(FfmpegArgs.Build(src, enc, bitrate, scale, onGpu)))) continue; // same command as before
+                    var err = await TryStartAsync(src, enc, bitrate, scale, onGpu, ct);
                     if (err is null)
                     {
                         Encoder = enc;
                         Source = src;
                         OutputSize = scale ?? (src.Width, src.Height);
-                        Log.Info($"Screen stream: {src} with {enc} at {bitrate / 1_000_000.0:0.#} Mb/s, sent at {OutputSize.W}x{OutputSize.H}" +
-                            (scale is null ? "" : gpuScale && src is CaptureSource.Dda ? " (GPU scaling)" : " (scaled in memory)"));
+                        string path = src is CaptureSource.Dda ? (onGpu ? ", GPU frames" : ", frames copied via memory") : "";
+                        Log.Info($"Screen stream: {src} with {enc}{path} at {bitrate / 1_000_000.0:0.#} Mb/s, sent at {OutputSize.W}x{OutputSize.H}");
                         return null;
                     }
-                    Log.Info($"Screen stream: {enc} on {src.GetType().Name} didn't start: {err}");
+                    Log.Info($"Screen stream: {enc} on {src}{(onGpu ? "" : " via memory")} didn't start: {err}");
                     lastError = err;
+                    // The capture itself failed (not the encoder): no encoder will do better on this source.
+                    if (IsCaptureFailure(err)) { captureFailed = true; break; }
                 }
+                if (captureFailed) break;
             }
         }
         return lastError;
     }
 
-    private async Task<string?> TryStartAsync(CaptureSource src, VideoEncoder enc, int bitrate, (int W, int H)? scale, bool gpuScale, CancellationToken ct)
+    /// <summary>True when ffmpeg couldn't open the capture (e.g. DXGI on the wrong GPU), as opposed to the encoder failing.</summary>
+    public static bool IsCaptureFailure(string error) =>
+        error.Contains("Error opening input", StringComparison.OrdinalIgnoreCase) &&
+        (error.Contains("ddagrab", StringComparison.OrdinalIgnoreCase) || error.Contains("gdigrab", StringComparison.OrdinalIgnoreCase));
+
+    private async Task<string?> TryStartAsync(CaptureSource src, VideoEncoder enc, int bitrate, (int W, int H)? scale, bool onGpu, CancellationToken ct)
     {
         var psi = new ProcessStartInfo(_ffmpeg)
         {
@@ -265,7 +282,7 @@ public sealed class ScreenStreamer : IDisposable
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var arg in FfmpegArgs.Build(src, enc, bitrate, scale, gpuScale)) psi.ArgumentList.Add(arg);
+        foreach (var arg in FfmpegArgs.Build(src, enc, bitrate, scale, onGpu)) psi.ArgumentList.Add(arg);
         var proc = Process.Start(psi);
         if (proc is null) return "ffmpeg didn't start";
         lock (_stderr) _stderr.Clear();

@@ -185,10 +185,18 @@ internal sealed class MirrorService : IDisposable
             fps = Math.Clamp(fps, 15, 120);
             if (bitrate <= 0) bitrate = _usb ? 30_000_000 : 15_000_000;
 
-            var sources = new List<CaptureSource>();
+            // Fast DXGI capture, tried on every graphics adapter: ffmpeg may number them differently from
+            // Slate (e.g. NVIDIA first on an Intel + NVIDIA laptop), and only the adapter the screen is
+            // wired to can capture it.
+            var dda = new List<CaptureSource>();
             var dxgi = Dxgi.Outputs().FirstOrDefault(d => string.Equals(d.DeviceName, screen.DeviceName, StringComparison.OrdinalIgnoreCase));
-            if (dxgi.DeviceName is not null) sources.Add(new CaptureSource.Dda(dxgi.Adapter, dxgi.Index, dxgi.Width, dxgi.Height, fps));
-            sources.Add(new CaptureSource.Gdi(b.X, b.Y, b.Width & ~1, b.Height & ~1, Math.Min(fps, 30)));
+            if (dxgi.DeviceName is not null)
+            {
+                dda.Add(new CaptureSource.Dda(dxgi.Adapter, dxgi.Index, dxgi.Width, dxgi.Height, fps));
+                for (int a = 0; a < Dxgi.AdapterCount; a++)
+                    if (a != dxgi.Adapter) dda.Add(new CaptureSource.Dda(a, dxgi.Index, dxgi.Width, dxgi.Height, fps));
+            }
+            var gdi = new CaptureSource[] { new CaptureSource.Gdi(b.X, b.Y, b.Width & ~1, b.Height & ~1, Math.Min(fps, 30)) };
 
             SendState("starting", $"Starting the screen stream…");
             var streamer = new ScreenStreamer(ffmpeg, (au, key, pts) =>
@@ -201,7 +209,16 @@ internal sealed class MirrorService : IDisposable
                 Log.Info($"Screen stream stopped: {why}");
                 if (ReferenceEquals(_streamer, streamer)) _ = StartStreamAsync(screen.DeviceName, fps, bitrate, maxSize); // restart once more
             };
-            var err = await streamer.StartAsync(sources, FfmpegArgs.Order(_settings.PreferredEncoder), bitrate, cts.Token, maxSize);
+            var order = FfmpegArgs.Order(_settings.PreferredEncoder);
+            string? err = dda.Count > 0 ? await streamer.StartAsync(dda, order, bitrate, cts.Token, maxSize) : "no DXGI output";
+            if (err is not null && dda.Count > 0 && Dxgi.AdapterCount > 1 && GpuPreference.SetPowerSaving(ffmpeg))
+            {
+                // Laptops with two GPUs: DXGI capture only works from the GPU the screen is on, so run
+                // Slate's own ffmpeg on the integrated (power-saving) GPU and try again.
+                Log.Info("Fast capture failed on a two-GPU laptop; set Slate's ffmpeg to the power-saving GPU and retrying");
+                err = await streamer.StartAsync(dda, order, bitrate, cts.Token, maxSize);
+            }
+            if (err is not null) err = await streamer.StartAsync(gdi, order, bitrate, cts.Token, maxSize);
             if (err is not null)
             {
                 streamer.Dispose();

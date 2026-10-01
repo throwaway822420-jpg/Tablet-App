@@ -10,6 +10,9 @@ internal static class Dxgi
 {
     public readonly record struct Output(int Adapter, int Index, string DeviceName, int X, int Y, int Width, int Height);
 
+    /// <summary>Graphics adapters found by the last <see cref="Outputs"/> call (2+ on laptops with Intel plus NVIDIA/AMD).</summary>
+    public static int AdapterCount { get; private set; }
+
     public static List<Output> Outputs()
     {
         var list = new List<Output>();
@@ -21,6 +24,7 @@ internal static class Dxgi
             {
                 for (uint a = 0; factory.EnumAdapters1(a, out var adapter) == 0; a++)
                 {
+                    AdapterCount = (int)a + 1;
                     try
                     {
                         for (uint o = 0; adapter.EnumOutputs(o, out var output) == 0; o++)
