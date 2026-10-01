@@ -98,7 +98,7 @@ class KeyboardSwitchService : AccessibilityService() {
             gravity = Gravity.TOP or Gravity.START
             val height = (40 * d).toInt()
             y = (keyboard.top - height - (6 * d).toInt()).coerceAtLeast(0)
-            x = (keyboard.right - (132 * d).toInt()).coerceAtLeast(0)
+            x = keyboard.left + (16 * d).toInt() // left end, clear of the keyboard's own top-right controls
         }
         val b = button ?: TextView(this).apply {
             text = "✎ Slate"
