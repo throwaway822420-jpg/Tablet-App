@@ -34,7 +34,7 @@ internal sealed class AskService
         mirror.Handlers["shot"] = (_, _) => Task.Run(SendScreenshot);
         mirror.Handlers["ask"] = (header, data) =>
         {
-            var r = data is null ? null : AskRequest.FromBlob(header, data);
+            var r = AskRequest.FromBlob(header, data); // a typed message comes without a Blob
             if (r is null) Status(header.Str("askId"), "error", "The question didn't arrive complete. Try again.");
             else Task.Run(() => AskAsync(r));
         };
@@ -148,7 +148,7 @@ internal sealed class AskService
         Directory.CreateDirectory(StudyDir);
         File.WriteAllText(systemFile, StudyPrompt.System);
 
-        Status(r.AskId, "thinking", "Claude is reading your screen…", new JsonObject { ["session"] = session });
+        Status(r.AskId, "thinking", r.Images.Count > 0 ? "Claude is reading your screen…" : "Claude is thinking…", new JsonObject { ["session"] = session });
         var outcome = await ClaudeCodeRunner.RunAsync(cli, dir, ClaudeCodeRunner.Args(fresh, session, "Slate: " + title, systemFile),
             StudyPrompt.ForClaudeCode(r, paths), ev =>
             {

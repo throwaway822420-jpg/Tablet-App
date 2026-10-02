@@ -46,7 +46,7 @@ class AskActivity : Activity() {
             return
         }
         annotator = Annotator(this, image)
-        annotator.color = if (followUp) Color.rgb(20, 20, 20) else Color.rgb(230, 40, 40)
+        annotator.color = Color.rgb(230, 40, 40)
 
         val root = FrameLayout(this)
         root.addView(annotator, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -91,7 +91,12 @@ class AskActivity : Activity() {
 
         // One tap sends with that intent.
         val intents = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val choices = if (followUp) listOf("followup" to "Send") else StudyStore.INTENT_LABELS.entries.filter { it.key != "followup" }.map { it.key to it.value }
+        // A follow-up is drawn on a screenshot of the answer: Send asks about it, or pick an intent.
+        val choices = if (followUp) {
+            listOf("followup" to "Send") + StudyStore.INTENT_LABELS.entries.filter { it.key in setOf("explain", "steps", "hint", "quiz") }.map { it.key to it.value }
+        } else {
+            StudyStore.INTENT_LABELS.entries.filter { it.key != "followup" && it.key != "chat" }.map { it.key to it.value }
+        }
         choices.forEachIndexed { i, (key, label) ->
             intents.addView(
                 WritePanel.makeButton(this, label, accent = i == 0) { send(key) },
@@ -121,12 +126,12 @@ class AskActivity : Activity() {
             append(if (session != null) "Continuing: ${session.title}" else "New topic")
             append(" · ")
             append(if (BulkLink.connected && session?.backend != "tablet") "answered via the PC" else "answered on the tablet (Claude Opus 5.5)")
-            append(if (followUp) " · write your follow-up" else " · circle or highlight, write your question, then tap an intent")
+            append(if (followUp) " · circle what you mean on the answer and write your question" else " · circle or highlight, write your question, then tap an intent")
         }
     }
 
     private fun loadImage(): Bitmap? {
-        if (followUp) {
+        if (followUp && intent.getStringExtra(EXTRA_IMAGE_PATH) == null) {
             val dm = resources.displayMetrics
             return Bitmap.createBitmap(dm.widthPixels, dm.heightPixels, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.WHITE) }
         }
@@ -153,7 +158,7 @@ class AskActivity : Activity() {
             return
         }
         if (followUp && annotator.marks.isEmpty()) {
-            Toast.makeText(this, "Write your follow-up first.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Circle something or write your question first.", Toast.LENGTH_SHORT).show()
             return
         }
         val annotated = annotator.composite()
@@ -161,12 +166,15 @@ class AskActivity : Activity() {
         val session = sessionId
         thread(name = "slate-ask-prep", isDaemon = true) {
             val images = buildList {
-                add((if (followUp) "followup.jpg" else "screen.jpg") to Annotator.jpeg(annotated))
+                add((if (followUp) "answer.jpg" else "screen.jpg") to Annotator.jpeg(annotated))
                 crop?.let { add("crop.jpg" to Annotator.jpeg(Annotator.limit(it, 1600), 92)) }
             }
             val sid = StudyHub.ask(session, intentKey, images, "", prefs.apiKey)
             runOnUiThread {
-                startActivity(Intent(this, StudyActivity::class.java).putExtra(StudyActivity.EXTRA_SESSION, sid))
+                startActivity(
+                    Intent(this, StudyActivity::class.java).putExtra(StudyActivity.EXTRA_SESSION, sid)
+                        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                )
                 finish()
             }
         }
@@ -189,13 +197,19 @@ class AskActivity : Activity() {
         const val EXTRA_SESSION = "session"
         const val EXTRA_FOLLOW_UP = "follow_up"
 
-        /** Saves a screenshot to the cache and opens it for annotation. */
-        fun start(activity: Activity, screenshot: Bitmap, sessionId: String? = null) {
-            val f = File(activity.cacheDir, "ask-screen.jpg")
+        /**
+         * Saves a screenshot to the cache and opens it for annotation. [newTask] puts it in Slate's
+         * own task (used by the Ask Claude shortcut, whose capture task then goes away, so the next
+         * tap captures afresh instead of bringing back this screen).
+         */
+        fun start(activity: Activity, screenshot: Bitmap, sessionId: String? = null, followUp: Boolean = false, newTask: Boolean = false) {
+            val f = File(activity.cacheDir, "ask-screen-${System.currentTimeMillis()}.jpg")
+            activity.cacheDir.listFiles { x -> x.name.startsWith("ask-screen") }?.forEach { it.delete() }
             f.outputStream().use { screenshot.compress(Bitmap.CompressFormat.JPEG, 95, it) }
-            activity.startActivity(
-                Intent(activity, AskActivity::class.java).putExtra(EXTRA_IMAGE_PATH, f.absolutePath).putExtra(EXTRA_SESSION, sessionId),
-            )
+            val i = Intent(activity, AskActivity::class.java).putExtra(EXTRA_IMAGE_PATH, f.absolutePath).putExtra(EXTRA_SESSION, sessionId)
+                .putExtra(EXTRA_FOLLOW_UP, followUp)
+            if (newTask) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            activity.startActivity(i)
         }
     }
 }

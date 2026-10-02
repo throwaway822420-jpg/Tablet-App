@@ -13,18 +13,26 @@ public enum AskBackend
     ClaudeDesktop,
 }
 
-/// <summary>A question from the tablet: an annotated screenshot (or handwritten follow-up) plus an intent.</summary>
+/// <summary>
+/// A question from the tablet: an annotated screenshot (or a screenshot of an answer for a follow-up)
+/// plus an intent, or a typed chat message ("chat", with <see cref="Text"/> and usually no images).
+/// </summary>
 public sealed record AskRequest(
     string AskId,
     string SessionId,
     bool NewSession,
     string Intent,
     string Title,
-    IReadOnlyList<(string Name, byte[] Data)> Images)
+    IReadOnlyList<(string Name, byte[] Data)> Images,
+    string Text = "")
 {
-    /// <summary>Parses an "ask" Blob: header {askId, session, new, intent, title, images:[{name, size}]} + the images back to back.</summary>
-    public static AskRequest? FromBlob(JsonObject header, byte[] data)
+    /// <summary>
+    /// Parses an "ask" message: header {askId, session, new, intent, title, text?, images:[{name, size}]}
+    /// with the images back to back in a Blob (or a plain JSON message when there are none).
+    /// </summary>
+    public static AskRequest? FromBlob(JsonObject header, byte[]? data)
     {
+        data ??= Array.Empty<byte>();
         var images = new List<(string, byte[])>();
         int offset = 0;
         if (header["images"] is JsonArray arr)
@@ -39,8 +47,9 @@ public sealed record AskRequest(
             }
         }
         string id = header.Str("askId");
-        if (id.Length == 0 || images.Count == 0) return null;
-        return new AskRequest(id, header.Str("session"), header.Bool("new"), header.Str("intent", "ask"), header.Str("title"), images);
+        string text = header.Str("text").Trim();
+        if (id.Length == 0 || (images.Count == 0 && text.Length == 0)) return null;
+        return new AskRequest(id, header.Str("session"), header.Bool("new"), header.Str("intent", "ask"), header.Str("title"), images, text);
     }
 
     /// <summary>Only simple image file names: the tablet never chooses where files go or what type they are.</summary>
@@ -65,7 +74,8 @@ public static class StudyPrompt
         ["hint"] = "Give me a hint only: nudge me towards the next step without giving the answer away.",
         ["check"] = "Check my working on what I've marked: say what's right, and point out the first mistake and why without redoing everything for me.",
         ["quiz"] = "Quiz me on this: ask me 3 short questions of increasing difficulty to test my understanding, and don't give the answers yet.",
-        ["followup"] = "This is a handwritten follow-up to our conversation. Read it and reply.",
+        ["followup"] = "This is a follow-up to our conversation: a screenshot of your last answer with my pen annotations and my handwritten question on it. Read it and reply.",
+        ["chat"] = "",
     };
 
     public const string System = """
@@ -84,23 +94,34 @@ public static class StudyPrompt
     public static string ForClaudeCode(AskRequest r, IEnumerable<string> savedPaths)
     {
         var sb = new StringBuilder();
-        sb.AppendLine(Intents.TryGetValue(r.Intent, out var i) ? i : Intents["ask"]);
-        sb.AppendLine();
+        string intent = Intent(r);
+        if (intent.Length > 0) sb.AppendLine(intent).AppendLine();
+        if (r.Text.Length > 0) sb.AppendLine(r.Text).AppendLine();
         var paths = savedPaths.ToList();
-        sb.AppendLine(r.Intent == "followup" ? "My handwriting is in this image — read it with the Read tool:" : "Read these images with the Read tool:");
+        if (paths.Count == 0) return sb.ToString().TrimEnd() + Environment.NewLine;
+        sb.AppendLine(r.Intent == "followup" ? "My question is handwritten on this screenshot of your answer — read it with the Read tool:" : "Read these images with the Read tool:");
         foreach (var (p, n) in paths.Zip(r.Images.Select(x => x.Name)))
         {
             string what = n.Contains("crop", StringComparison.OrdinalIgnoreCase) ? "zoomed crop of what I circled"
-                : r.Intent == "followup" ? "my handwritten follow-up" : "my screen with my annotations";
+                : r.Intent == "followup" ? "your previous answer with my annotations" : "my screen with my annotations";
             sb.AppendLine($"- {p} ({what})");
         }
         return sb.ToString();
     }
 
     /// <summary>The text typed into Claude Desktop after the pasted images.</summary>
-    public static string ForDesktop(AskRequest r) =>
-        (Intents.TryGetValue(r.Intent, out var i) ? i : Intents["ask"]) +
-        (r.Intent == "followup" ? "" : " (The image is my screen with my pen annotations; my question is handwritten on it.)");
+    public static string ForDesktop(AskRequest r)
+    {
+        var parts = new List<string>();
+        if (Intent(r) is { Length: > 0 } i) parts.Add(i);
+        if (r.Text.Length > 0) parts.Add(r.Text);
+        if (r.Images.Count > 0 && r.Intent is not ("followup" or "chat")) parts.Add("(The image is my screen with my pen annotations; my question is handwritten on it.)");
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>The intent's wording; none for a typed chat message, which speaks for itself.</summary>
+    private static string Intent(AskRequest r) =>
+        r.Intent == "chat" ? "" : Intents.TryGetValue(r.Intent, out var i) ? i : Intents["ask"];
 }
 
 /// <summary>What a line of Claude Code's <c>--output-format stream-json</c> output means for Slate.</summary>

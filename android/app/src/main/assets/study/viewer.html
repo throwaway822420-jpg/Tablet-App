@@ -17,6 +17,7 @@
   .meta b { color: #7fd6a8; font-weight: 600; }
   img.shot { max-width: 100%; max-height: 380px; border-radius: 8px; border: 1px solid #333; display: block; margin-bottom: 12px; }
   .answer { background: #202329; border-radius: 10px; padding: 4px 16px; }
+  .you { background: #1f4d3a; color: #f0f0f0; border-radius: 10px; padding: 10px 14px; margin: 0 0 10px auto; max-width: 80%; width: fit-content; white-space: pre-wrap; }
   .answer pre { background: #111; padding: 10px; border-radius: 6px; overflow-x: auto; }
   .answer code { font-family: ui-monospace, monospace; font-size: 15px; }
   .answer table { border-collapse: collapse; } .answer td, .answer th { border: 1px solid #444; padding: 4px 8px; }
@@ -58,7 +59,8 @@
       else body = md(e.markdown) + (e.state === 'pending' ? '<p class="pending">…</p>' : '');
       const cost = e.cost > 0 ? ' · ~$' + e.cost.toFixed(3) : '';
       return '<div class="entry" id="e-' + esc(e.id) + '"><div class="meta"><b>' + esc(e.label) + '</b> · ' + esc(e.time) + cost + '</div>' +
-             '<img class="shot" src="' + esc(e.image) + '" onerror="this.remove()">' +
+             (e.text ? '<div class="you">' + esc(e.text) + '</div>' : '') +
+             (e.image ? '<img class="shot" src="' + esc(e.image) + '" onerror="this.remove()">' : '') +
              '<div class="answer">' + body + '</div></div>';
     }).join('');
     renderMathInElement(out, {

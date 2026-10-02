@@ -146,8 +146,12 @@ write your question, then tap **Ask**, **Explain**, **Step by step**, **Just a h
   Needs Claude Code installed and signed in on the PC.
 - **Claude Desktop app**: the question is pasted into Claude Desktop as a normal chat (the app pops
   up the first time, then stays in the background); replies stay in the app.
-- **History** keeps every question and answer on the tablet, rendered with maths and diagrams, with
-  handwritten **Follow up**, **Export PDF** and **Share Markdown**.
+- **History** is also a chat: type (or handwrite with Slate Keyboard) in the message box to carry on
+  the conversation, or **+ New chat**. **Follow up** / **✎ Draw** screenshots the answer so you can
+  circle part of it and write your question on it. Answers render with maths and diagrams;
+  **Export PDF** and **Share Markdown** keep a copy.
+- **Ask Claude** (Air command, tile or icon) always captures the screen afresh, even when a previous
+  question is still open in Slate.
 - **The tablet's own screen**: the "Ask Claude" app shortcut (add it to the S Pen's Air command via *Add shortcuts*), the "Ask Claude" Quick Settings tile (or sharing a screenshot to Slate). With Slate helper on (Android 11+), these capture the screen straight away; otherwise Android asks for screen-capture permission each time. The helper only takes a screenshot when you tap Ask Claude
   asks about whatever is on the tablet. Without a PC these go to Claude Opus 5.5 with your API key.
 - The main screen shows this month's approximate API spend.

@@ -158,7 +158,7 @@ JSON types:
 | `keys` | tablet → PC | `combo`, e.g. `Ctrl+Shift+Z`, `Alt+Tab`, `Win+D`, `F5` |
 | `touch` | tablet → PC | `contacts: [{id, x, y, phase: down/move/up}]` (Windows touch injection) |
 | `shot` | tablet → PC | request a full-resolution screenshot; answered with a `shot` BLOB `{w, h}` + JPEG |
-| `ask` (BLOB) | tablet → PC | `{askId, session, new, intent, title, images: [{name, size}]}` + the JPEGs back to back |
+| `ask` (BLOB) | tablet → PC | `{askId, session, new, intent, title, text?, images: [{name, size}]}` + the JPEGs back to back. A typed message (`intent: "chat"`, `text`) with no images is sent as a plain JSON message instead |
 | `ask.status` | PC → tablet | `askId`, `state` (thinking / error), `message`, `session` |
 | `ask.delta` | PC → tablet | `askId`, `text` (streamed reply) |
 | `ask.done` | PC → tablet | `askId`, `session`, `backend` (code / desktop), `title`, `markdown`, `cost` |

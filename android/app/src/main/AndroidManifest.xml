@@ -51,6 +51,7 @@
         <activity
             android:name=".study.StudyActivity"
             android:exported="false"
+            android:windowSoftInputMode="adjustResize"
             android:label="@string/history_label"
             android:theme="@style/Theme.Slate.Canvas" />
 

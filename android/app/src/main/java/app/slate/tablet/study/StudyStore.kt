@@ -25,13 +25,15 @@ class StudyStore(private val root: File) {
         val askId: String,
         val time: Long,
         val intent: String,
-        /** Image file name inside the session folder. */
+        /** Image file name inside the session folder ("" for a typed message). */
         val image: String,
         val markdown: String,
         /** "pending", "done" or "error". */
         val state: String,
         val status: String = "",
         val costUsd: Double = 0.0,
+        /** What the user typed (a chat message), if anything. */
+        val text: String = "",
     )
 
     private val lock = Any()
@@ -93,7 +95,9 @@ class StudyStore(private val root: File) {
         for (e in entries(sessionId)) {
             sb.append("## ").append(INTENT_LABELS[e.intent] ?: "Question").append(" — ")
                 .append(java.text.DateFormat.getDateTimeInstance().format(java.util.Date(e.time))).append("\n\n")
-            sb.append("![](${e.image})\n\n").append(e.markdown.ifBlank { "_(no answer)_" }).append("\n\n")
+            if (e.text.isNotBlank()) sb.append("> ").append(e.text.replace("\n", "\n> ")).append("\n\n")
+            if (e.image.isNotEmpty()) sb.append("![](${e.image})\n\n")
+            sb.append(e.markdown.ifBlank { "_(no answer)_" }).append("\n\n")
         }
         return sb.toString()
     }
@@ -124,7 +128,7 @@ class StudyStore(private val root: File) {
         (0 until a.length()).map { i ->
             val o = a.getJSONObject(i)
             Entry(o.getString("askId"), o.optLong("time"), o.optString("intent"), o.optString("image"), o.optString("markdown"),
-                o.optString("state"), o.optString("status"), o.optDouble("cost", 0.0))
+                o.optString("state"), o.optString("status"), o.optDouble("cost", 0.0), o.optString("text"))
         }
     } catch (e: Exception) {
         emptyList()
@@ -134,7 +138,7 @@ class StudyStore(private val root: File) {
         val a = JSONArray()
         list.forEach {
             a.put(JSONObject().put("askId", it.askId).put("time", it.time).put("intent", it.intent).put("image", it.image)
-                .put("markdown", it.markdown).put("state", it.state).put("status", it.status).put("cost", it.costUsd))
+                .put("markdown", it.markdown).put("state", it.state).put("status", it.status).put("cost", it.costUsd).put("text", it.text))
         }
         atomicWrite(File(dir(sessionId), "entries.json"), a.toString())
     }
@@ -151,7 +155,7 @@ class StudyStore(private val root: File) {
     companion object {
         val INTENT_LABELS = linkedMapOf(
             "ask" to "Ask", "explain" to "Explain", "steps" to "Step by step", "hint" to "Just a hint",
-            "check" to "Check my working", "quiz" to "Quiz me", "followup" to "Follow-up",
+            "check" to "Check my working", "quiz" to "Quiz me", "followup" to "Follow-up", "chat" to "Message",
         )
     }
 }

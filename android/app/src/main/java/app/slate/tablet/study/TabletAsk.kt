@@ -18,7 +18,7 @@ object TabletAsk {
         "hint" to "Give me a hint only: nudge me towards the next step without giving the answer away.",
         "check" to "Check my working on what I've marked: say what's right, and point out the first mistake and why without redoing everything for me.",
         "quiz" to "Quiz me on this: ask me 3 short questions of increasing difficulty to test my understanding, and don't give the answers yet.",
-        "followup" to "This is a handwritten follow-up to our conversation. Read it and reply.",
+        "followup" to "This is a follow-up to our conversation: a screenshot of your last answer with my pen annotations and my handwritten question on it. Read it and reply.",
     )
 
     // Same standing instructions as the PC's Claude Code sessions (Slate.Core/Ask.cs).
@@ -35,7 +35,7 @@ object TabletAsk {
     """.trimIndent()
 
     /** Blocking. Earlier answers in the session are included as text so follow-ups have context. */
-    fun ask(apiKey: String, intent: String, images: List<Pair<String, ByteArray>>, history: List<StudyStore.Entry>): Pair<String, Double> {
+    fun ask(apiKey: String, intent: String, images: List<Pair<String, ByteArray>>, history: List<StudyStore.Entry>, text: String = ""): Pair<String, Double> {
         val b = MessageCreateParams.builder()
             .model(MODEL)
             .maxTokens(16000L)
@@ -43,12 +43,17 @@ object TabletAsk {
             .addBeta(Requests.FALLBACK_BETA)
             .fallbacks(Requests.fallbacks())
             .system(SYSTEM)
-        for (h in history.takeLast(6)) {
-            b.addUserMessage("(Earlier question, image not repeated) " + (INTENTS[h.intent] ?: INTENTS.getValue("ask")))
+        for (h in history.takeLast(12)) {
+            val asked = listOfNotNull(
+                if (h.image.isNotEmpty()) "(Earlier question, image not repeated) " + (INTENTS[h.intent] ?: INTENTS.getValue("ask")) else null,
+                h.text.takeIf { it.isNotBlank() },
+            ).joinToString("\n").ifBlank { "(earlier message)" }
+            b.addUserMessage(asked)
             b.addAssistantMessage(h.markdown.ifBlank { "(no answer)" })
         }
+        val words = listOfNotNull(if (intent == "chat") null else INTENTS[intent] ?: INTENTS.getValue("ask"), text.takeIf { it.isNotBlank() })
         val content = images.map { (_, bytes) -> Requests.image(Base64.encodeToString(bytes, Base64.NO_WRAP), png = false) } +
-            BetaContentBlockParam.ofText(INTENTS[intent] ?: INTENTS.getValue("ask"))
+            BetaContentBlockParam.ofText(words.joinToString("\n\n").ifBlank { "(no message)" })
         b.addUserMessageOfBetaContentBlockParams(content)
         val message = Claude.call(apiKey, b.build())
         val u = message.usage()

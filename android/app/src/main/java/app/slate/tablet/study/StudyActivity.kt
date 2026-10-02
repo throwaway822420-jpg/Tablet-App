@@ -26,14 +26,16 @@ import java.text.DateFormat
 import java.util.Date
 
 /**
- * History of questions about the screen: sessions on the left, the selected conversation on the
- * right (Markdown, maths and diagrams rendered), with follow-ups, Open in Claude, export and delete.
+ * History of questions about the screen, and a chat with Claude: sessions on the left, the selected
+ * conversation on the right (Markdown, maths and diagrams rendered) with a message box underneath.
+ * Follow up screenshots the answer so you can draw on it and ask about it.
  */
 class StudyActivity : Activity() {
     private lateinit var list: LinearLayout
     private lateinit var web: WebView
     private lateinit var header: TextView
     private lateinit var actions: LinearLayout
+    private lateinit var input: EditText
     private var selected: String? = null
     private var pageReady = false
 
@@ -49,7 +51,17 @@ class StudyActivity : Activity() {
         selected = intent.getStringExtra(EXTRA_SESSION) ?: StudyHub.store.sessions().firstOrNull()?.id
 
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), dp(8), dp(8), dp(8)) }
-        val left = ScrollView(this).apply { addView(list); setBackgroundColor(Color.rgb(32, 34, 38)) }
+        val newChat = WritePanel.makeButton(this, "+ New chat", accent = true) {
+            selected = null
+            refreshList(); render()
+            input.requestFocus()
+        }
+        val left = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.rgb(32, 34, 38))
+            addView(newChat, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)).apply { setMargins(dp(8), dp(8), dp(8), 0) })
+            addView(ScrollView(this@StudyActivity).apply { addView(list) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
 
         header = TextView(this).apply {
             setTextColor(Color.WHITE); setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f); setPadding(dp(16), dp(12), dp(16), dp(4))
@@ -67,12 +79,33 @@ class StudyActivity : Activity() {
             }
             loadUrl("file:///android_asset/study/viewer.html")
         }
+        // Message box: type (or handwrite with Slate Keyboard) and send; ✎ draws on the answer instead.
+        input = EditText(this).apply {
+            hint = "Message Claude…"
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.rgb(140, 140, 140))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+            maxLines = 6
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            setBackgroundColor(Color.rgb(36, 39, 45))
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+        }
+        val compose = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.BOTTOM
+            setPadding(dp(12), dp(8), dp(12), dp(10))
+            addView(WritePanel.makeButton(this@StudyActivity, "✎ Draw") { followUp() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(48)).apply { marginEnd = dp(8) })
+            addView(input, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(WritePanel.makeButton(this@StudyActivity, "Send", accent = true) { sendTyped() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(48)).apply { marginStart = dp(8) })
+        }
         val right = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(24, 26, 30))
             addView(header)
             addView(actions)
             addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            addView(compose)
         }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -80,7 +113,47 @@ class StudyActivity : Activity() {
             addView(right, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
         }
         setContentView(root)
+        // Keep the message box above the keyboard.
+        window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         refreshList()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(EXTRA_SESSION)?.let { selected = it; refreshList(); render() }
+    }
+
+    private fun sendTyped() {
+        val text = input.text.toString().trim()
+        if (text.isEmpty()) return
+        val prefs = app.slate.tablet.ui.Prefs(this)
+        if (!app.slate.tablet.link.BulkLink.connected && prefs.apiKey.isBlank()) {
+            Toast.makeText(this, "Connect the PC, or add your Anthropic API key on Slate's main screen.", Toast.LENGTH_LONG).show()
+            return
+        }
+        input.setText("")
+        selected = StudyHub.ask(selected, "chat", emptyList(), "", prefs.apiKey, text)
+        refreshList(); render()
+    }
+
+    /** Screenshots the conversation as it's shown, then opens it to draw on and ask about. */
+    private fun followUp() {
+        val sid = selected ?: return Toast.makeText(this, "Ask something first, or type a message.", Toast.LENGTH_SHORT).show()
+        val decor = window.decorView
+        if (decor.width <= 0 || decor.height <= 0) return
+        val full = android.graphics.Bitmap.createBitmap(decor.width, decor.height, android.graphics.Bitmap.Config.ARGB_8888)
+        android.view.PixelCopy.request(window, full, { result ->
+            if (result != android.view.PixelCopy.SUCCESS) {
+                Toast.makeText(this, "Couldn't capture the answer.", Toast.LENGTH_SHORT).show()
+                return@request
+            }
+            val at = IntArray(2).also { web.getLocationInWindow(it) }
+            val x = at[0].coerceIn(0, full.width - 1)
+            val y = at[1].coerceIn(0, full.height - 1)
+            val shot = android.graphics.Bitmap.createBitmap(full, x, y, web.width.coerceAtMost(full.width - x), web.height.coerceAtMost(full.height - y))
+            AskActivity.start(this, shot, sid, followUp = true)
+        }, android.os.Handler(mainLooper))
     }
 
     override fun onStart() {
@@ -131,7 +204,7 @@ class StudyActivity : Activity() {
     private fun render() {
         val sid = selected
         val session = sid?.let { StudyHub.store.session(it) }
-        header.text = session?.title ?: ""
+        header.text = session?.title ?: "New chat"
         buildActions(session)
         if (!pageReady) return
         val entries = JSONArray()
@@ -142,7 +215,8 @@ class StudyActivity : Activity() {
                     .put("id", e.askId)
                     .put("label", StudyStore.INTENT_LABELS[e.intent] ?: "Question")
                     .put("time", DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(e.time)))
-                    .put("image", "file://" + java.io.File(dir, e.image).absolutePath)
+                    .put("image", if (e.image.isEmpty()) "" else "file://" + java.io.File(dir, e.image).absolutePath)
+                    .put("text", e.text)
                     .put("markdown", if (e.state == "pending") StudyHub.liveText(e.askId) ?: "" else e.markdown)
                     .put("state", e.state)
                     .put("status", e.status)
@@ -159,9 +233,7 @@ class StudyActivity : Activity() {
             WritePanel.makeButton(this, label, accent, onClick),
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(44)).apply { marginEnd = dp(8) },
         )
-        action("Follow up", accent = true) {
-            startActivity(Intent(this, AskActivity::class.java).putExtra(AskActivity.EXTRA_SESSION, session.id).putExtra(AskActivity.EXTRA_FOLLOW_UP, true))
-        }
+        action("Follow up", accent = true) { followUp() }
         if (session.backend != "tablet") action("Open in Claude") {
             val ok = StudyHub.openInClaude(session.id)
             Toast.makeText(

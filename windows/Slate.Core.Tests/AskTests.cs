@@ -47,6 +47,22 @@ public class AskTests
     }
 
     [Fact]
+    public void TypedChatMessagesNeedNoImages()
+    {
+        var chat = AskRequest.FromBlob(new JsonObject { ["askId"] = "c", ["intent"] = "chat", ["text"] = "  why is it negative?  " }, null)!;
+        Assert.Empty(chat.Images);
+        Assert.Equal("why is it negative?", chat.Text);
+        Assert.Equal("why is it negative?" + Environment.NewLine, StudyPrompt.ForClaudeCode(chat, Array.Empty<string>()));
+        Assert.Equal("why is it negative?", StudyPrompt.ForDesktop(chat));
+        Assert.Null(AskRequest.FromBlob(new JsonObject { ["askId"] = "c", ["intent"] = "chat", ["text"] = " " }, null));
+
+        var follow = new AskRequest("f", "s", false, "followup", "", new[] { ("answer.jpg", new byte[1]) });
+        var p = StudyPrompt.ForClaudeCode(follow, new[] { @"C:\S\q2-answer.jpg" });
+        Assert.StartsWith(StudyPrompt.Intents["followup"], p);
+        Assert.Contains("(your previous answer with my annotations)", p);
+    }
+
+    [Fact]
     public void ParsesClaudeCodeStream()
     {
         Assert.Equal(new ClaudeCodeEvent.Started("abc"), ClaudeCodeEvent.Parse("""{"type":"system","subtype":"init","session_id":"abc","tools":[]}"""));

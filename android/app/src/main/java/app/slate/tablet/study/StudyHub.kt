@@ -48,32 +48,34 @@ object StudyHub {
     fun liveText(askId: String): String? = live[askId]?.toString()
 
     /**
-     * Asks Claude. [images] are (name, JPEG bytes); the first is kept as the history thumbnail.
-     * Returns the local session id.
+     * Asks Claude. [images] are (name, JPEG bytes); the first is kept as the history thumbnail. A
+     * typed chat message has intent "chat", [text] and usually no images. Returns the local session id.
      */
-    fun ask(sessionId: String?, intent: String, images: List<Pair<String, ByteArray>>, title: String, apiKey: String): String {
+    fun ask(sessionId: String?, intent: String, images: List<Pair<String, ByteArray>>, title: String, apiKey: String, text: String = ""): String {
         val pc = BulkLink.connected
-        val session = sessionId?.let { store.session(it) } ?: store.newSession(title.ifBlank { defaultTitle() }, if (pc) "pc" else "tablet")
+        val session = sessionId?.let { store.session(it) }
+            ?: store.newSession(title.ifBlank { if (text.isNotBlank()) text.take(40) else defaultTitle() }, if (pc) "pc" else "tablet")
         val askId = UUID.randomUUID().toString()
-        val imageName = "$askId.jpg"
-        File(store.dir(session.id), imageName).writeBytes(images.first().second)
+        val imageName = if (images.isEmpty()) "" else "$askId.jpg"
+        images.firstOrNull()?.let { File(store.dir(session.id), imageName).writeBytes(it.second) }
         images.drop(1).forEachIndexed { i, (_, bytes) -> File(store.dir(session.id), "$askId-extra$i.jpg").writeBytes(bytes) }
-        store.addEntry(session.id, StudyStore.Entry(askId, System.currentTimeMillis(), intent, imageName, "", "pending", "Sending…"))
+        store.addEntry(session.id, StudyStore.Entry(askId, System.currentTimeMillis(), intent, imageName, "", "pending", "Sending…", text = text))
         changed(session.id)
 
         if (pc && session.backend != "tablet") {
             val header = JSONObject().put("t", "ask").put("askId", askId).put("intent", intent).put("title", session.title)
-                .put("session", session.remote).put("new", session.remote.isEmpty())
+                .put("session", session.remote).put("new", session.remote.isEmpty()).put("text", text)
             val sizes = JSONArray()
             images.forEach { (name, bytes) -> sizes.put(JSONObject().put("name", name).put("size", bytes.size)) }
             header.put("images", sizes)
             val all = images.fold(ByteArray(0)) { acc, (_, b) -> acc + b }
-            if (!BulkLink.sendBlob(header, all)) fail(askId, "Lost the connection to the PC. Try again.")
+            val sent = if (images.isEmpty()) BulkLink.send(header) else BulkLink.sendBlob(header, all)
+            if (!sent) fail(askId, "Lost the connection to the PC. Try again.")
         } else {
             thread(name = "slate-ask", isDaemon = true) {
                 try {
                     val history = store.entries(session.id).filter { it.askId != askId && it.state == "done" }
-                    val (markdown, cost) = TabletAsk.ask(apiKey, intent, images, history)
+                    val (markdown, cost) = TabletAsk.ask(apiKey, intent, images, history, text)
                     store.updateEntry(askId) { it.copy(markdown = markdown, state = "done", status = "", costUsd = cost) }
                 } catch (e: Exception) {
                     Log.w(TAG, "Ask failed", e)

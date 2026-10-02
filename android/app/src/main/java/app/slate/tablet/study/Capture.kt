@@ -58,7 +58,7 @@ class CaptureActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST || resultCode != RESULT_OK || data == null) {
-            finish()
+            finishAndRemoveTask()
             return
         }
         pending = this
@@ -68,8 +68,10 @@ class CaptureActivity : Activity() {
     internal fun onCaptured(bitmap: Bitmap?) {
         pending = null
         if (bitmap == null) Toast.makeText(this, "Couldn't capture the screen.", Toast.LENGTH_SHORT).show()
-        else AskActivity.start(this, bitmap, StudyHub.recentSession(tabletOnly = false))
-        finish()
+        else AskActivity.start(this, bitmap, StudyHub.recentSession(tabletOnly = false), newTask = true)
+        // Remove this capture task entirely, so the next Ask Claude tap starts a fresh capture
+        // rather than bringing back the previous question.
+        finishAndRemoveTask()
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
     }

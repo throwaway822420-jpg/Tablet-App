@@ -55,4 +55,17 @@ class StudyTest {
         assertTrue(again.sessions().isEmpty())
         assertNotNull(StudyStore.INTENT_LABELS["quiz"])
     }
+
+    @Test fun storeKeepsTypedMessages() {
+        val s = StudyStore(tmp.root)
+        val a = s.newSession("Chat", "tablet")
+        s.addEntry(a.id, StudyStore.Entry("m1", 1, "chat", "", "Because the slope falls.", "done", text = "Why is it negative?"))
+        val e = StudyStore(tmp.root).entries(a.id).single()
+        assertEquals("Why is it negative?", e.text)
+        assertEquals("", e.image)
+        val md = s.exportMarkdown(a.id)
+        assertTrue(md.contains("## Message"))
+        assertTrue(md.contains("> Why is it negative?"))
+        assertTrue(!md.contains("![]("))
+    }
 }
