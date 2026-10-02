@@ -152,22 +152,22 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Serves the setup script on localhost while the dialog is open, and watches for the bridge. */
+    /** Copies the one-line setup command for Termux, and watches for the bridge to start. */
     private fun setUpTermux() {
-        val tc = app.slate.tablet.ai.TermuxClaude
-        tc.startSetupServer(this)
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(R.string.termux_setup_title)
-            .setMessage(getString(R.string.termux_setup_message, tc.SETUP_COMMAND))
-            .setPositiveButton(R.string.termux_copy, null)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setOnDismissListener { tc.stopSetupServer() }
-            .show()
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+        val command = app.slate.tablet.ai.TermuxClaude.setupCommand(this)
+        fun copy() {
             getSystemService(android.content.ClipboardManager::class.java)
-                .setPrimaryClip(android.content.ClipData.newPlainText("Slate setup", tc.SETUP_COMMAND))
+                .setPrimaryClip(android.content.ClipData.newPlainText("Slate setup", command))
             Toast.makeText(this, R.string.termux_copied, Toast.LENGTH_SHORT).show()
         }
+        copy()
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.termux_setup_title)
+            .setMessage(R.string.termux_setup_message)
+            .setPositiveButton(R.string.termux_copy, null)
+            .setNegativeButton(R.string.close, null)
+            .show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { copy() }
         val poll = object : Runnable {
             override fun run() {
                 if (!dialog.isShowing) return

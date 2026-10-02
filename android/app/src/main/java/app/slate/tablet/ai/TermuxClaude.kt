@@ -6,8 +6,6 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
-import java.net.InetAddress
-import java.net.ServerSocket
 import java.net.URL
 import java.security.SecureRandom
 import kotlin.concurrent.thread
@@ -18,7 +16,6 @@ import kotlin.concurrent.thread
  */
 object TermuxClaude {
     const val PORT = 47820
-    const val SETUP_PORT = 47821
 
     @Volatile private var checkedAt = 0L
     @Volatile private var lastOk = false
@@ -114,56 +111,28 @@ object TermuxClaude {
             if (path != "/health") requestMethod = "POST"
         }
 
-    // --- One-time setup: Slate serves the bridge to Termux over localhost ---
+    // --- One-time setup: everything travels in the copied command (no server, works offline) ---
 
-    @Volatile private var setupServer: ServerSocket? = null
-
-    /** The command to paste into Termux while the setup server runs. */
-    const val SETUP_COMMAND = "command -v curl >/dev/null || pkg install -y curl; curl -fsS http://127.0.0.1:$SETUP_PORT/setup | sh"
-
-    fun startSetupServer(context: Context) {
-        if (setupServer != null) return
-        val app = context.applicationContext
-        val script = setupScript(token(app))
-        val bridge = app.assets.open("termux/slate-bridge.js").use { it.readBytes() }
-        val server = try {
-            ServerSocket(SETUP_PORT, 4, InetAddress.getByName("127.0.0.1"))
-        } catch (e: Exception) {
-            return
-        }
-        setupServer = server
-        thread(name = "slate-termux-setup", isDaemon = true) {
-            while (!server.isClosed) {
-                val s = try { server.accept() } catch (e: Exception) { break }
-                runCatching {
-                    s.use {
-                        val first = BufferedReader(InputStreamReader(it.getInputStream())).readLine().orEmpty()
-                        val (status, type, data) = when {
-                            first.startsWith("GET /setup ") -> Triple("200 OK", "text/x-shellscript", script.toByteArray())
-                            first.startsWith("GET /slate-bridge.js ") -> Triple("200 OK", "application/javascript", bridge)
-                            else -> Triple("404 Not Found", "text/plain", "not found".toByteArray())
-                        }
-                        val out = it.getOutputStream()
-                        out.write("HTTP/1.1 $status\r\nContent-Type: $type\r\nContent-Length: ${data.size}\r\nConnection: close\r\n\r\n".toByteArray())
-                        out.write(data)
-                        out.flush()
-                    }
-                }
-            }
-        }
+    /**
+     * One line to paste into Termux. It carries the whole setup script, the bridge included, as
+     * base64, because Slate can't serve files once it's in the background (Android freezes it).
+     */
+    fun setupCommand(context: Context): String {
+        val bridge = context.applicationContext.assets.open("termux/slate-bridge.js").use { it.readBytes().toString(Charsets.UTF_8) }
+        val b64 = android.util.Base64.encodeToString(setupScript(token(context), bridge).toByteArray(), android.util.Base64.NO_WRAP)
+        return "echo $b64 | base64 -d | sh"
     }
 
-    fun stopSetupServer() {
-        runCatching { setupServer?.close() }
-        setupServer = null
-    }
-
-    internal fun setupScript(token: String) = """
+    internal fun setupScript(token: String, bridge: String): String {
+        require(!bridge.lines().contains("SLATE_EOF")) { "bridge contains the heredoc marker" }
+        return """
         set -e
         echo "Setting up Slate's bridge to Claude Code…"
         command -v node >/dev/null 2>&1 || { echo "Installing Node.js…"; pkg install -y nodejs; }
         mkdir -p "${'$'}HOME/.slate"
-        curl -fsS http://127.0.0.1:$SETUP_PORT/slate-bridge.js -o "${'$'}HOME/.slate/slate-bridge.js"
+        cat > "${'$'}HOME/.slate/slate-bridge.js" <<'SLATE_EOF'
+        @BRIDGE@
+        SLATE_EOF
         printf '%s' '$token' > "${'$'}HOME/.slate/token"
         chmod 600 "${'$'}HOME/.slate/token"
         cat > "${'$'}PREFIX/bin/slate-claude" <<'EOS'
@@ -176,5 +145,6 @@ object TermuxClaude {
           echo "Claude Code isn't installed yet: run  npm install -g @anthropic-ai/claude-code  then  claude  once to sign in."
         fi
         echo "Done. Start it with:  slate-claude   (leave Termux running while you study)"
-    """.trimIndent() + "\n"
+        """.trimIndent().replace("@BRIDGE@", bridge.trimEnd()) + "\n"
+    }
 }

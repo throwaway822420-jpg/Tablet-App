@@ -72,13 +72,14 @@
     <string name="side_chat_on">The floating chat box is on: answers appear in it, on top of whatever you\'re looking at.</string>
 
     <string name="termux_header">Claude Code on this tablet (your Claude subscription)</string>
-    <string name="termux_help">Without the PC, Ask can use Claude Code running in Termux on this tablet, signed in with your Claude subscription, instead of the API key. One-time setup: install Termux and Claude Code (npm install -g @anthropic-ai/claude-code, then run claude once to sign in). Tap Set up, paste the command into Termux, then run slate-claude there whenever you want to use it (leave Termux open).</string>
+    <string name="termux_help">Without the PC, Ask can use Claude Code running in Termux on this tablet, signed in with your Claude subscription, instead of the API key. One-time setup: install Termux and Claude Code (npm install -g @anthropic-ai/claude-code, then run claude once to sign in). Tap Set up (it copies a command), paste it into Termux and press Enter, then run slate-claude there whenever you want to use it (leave Termux open).</string>
     <string name="termux_setup">Set up…</string>
     <string name="termux_check">Check</string>
     <string name="termux_ok">✓ Claude Code in Termux is connected.</string>
     <string name="termux_off">Claude Code in Termux isn\'t running (start it with slate-claude).</string>
     <string name="termux_setup_title">Set up Claude Code in Termux</string>
-    <string name="termux_setup_message">Keep this open. In Termux, paste and run:\n\n%1$s\n\nThen run  slate-claude  and leave it running. This screen shows ✓ when it connects.</string>
+    <string name="termux_setup_message">The setup command is copied. In Termux, long-press › Paste, then press Enter. It installs Slate\'s bridge (Node.js too if needed).\n\nThen run  slate-claude  in Termux and leave it running. Slate\'s main screen shows ✓ when it connects.</string>
+    <string name="close">Close</string>
     <string name="termux_copy">Copy command</string>
     <string name="termux_copied">Copied. Paste it into Termux.</string>
     <string name="pref_ask_api_fallback">Ask may use the API key when neither the PC nor Claude Code is available</string>
