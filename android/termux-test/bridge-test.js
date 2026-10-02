@@ -2,7 +2,7 @@
 const assert = require('assert');
 process.env.SLATE_TOKEN = 'secret123';
 process.env.CLAUDE_BIN = __dirname + '/fake-claude';
-const { server, parseLine } = require(__dirname + "/../app/src/main/assets/termux/slate-bridge.js");
+const { server, parseLine, findClaude, useClaude } = require(__dirname + "/../app/src/main/assets/termux/slate-bridge.js");
 const http = require('http');
 function req(path, body, token) {
   return new Promise((res, rej) => {
@@ -14,6 +14,9 @@ function req(path, body, token) {
 }
 server.listen(0, '127.0.0.1', async () => {
   try {
+    const found = findClaude();
+    assert.equal(found.cmd, process.env.CLAUDE_BIN);
+    useClaude(found);
     assert.equal(JSON.parse((await req('/health')).body).ok, true);
     assert.equal((await req('/ask', { askId: 'a' }, 'wrong')).status, 401);
     assert.equal((await req('/ask', { askId: 'a' })).status, 401);

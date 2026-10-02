@@ -20,7 +20,7 @@ const { spawn } = require('child_process');
 const VERSION = 1;
 const HOME = path.join(os.homedir(), '.slate');
 const PORT = Number(process.env.SLATE_PORT || 47820);
-const CLAUDE = process.env.CLAUDE_BIN || 'claude';
+const PREFIX_DIR = process.env.PREFIX || '/data/data/com.termux/files/usr';
 const TOKEN = (process.env.SLATE_TOKEN || readFile(path.join(HOME, 'token')) || '').trim();
 const WORK = path.join(HOME, 'work');
 const IDLE_MS = 5 * 60 * 1000;
@@ -30,6 +30,32 @@ fs.mkdirSync(WORK, { recursive: true });
 function readFile(p) {
   try { return fs.readFileSync(p, 'utf8'); } catch { return null; }
 }
+
+// --- Finding Claude Code: plain Termux, or inside a proot-distro Linux (where its native build runs) ---
+
+const { spawnSync } = require('child_process');
+
+/** How to start Claude Code: a command plus the arguments that go before Claude Code's own. */
+function findClaude() {
+  if (process.env.CLAUDE_BIN) return { cmd: process.env.CLAUDE_BIN, pre: [], where: process.env.CLAUDE_BIN };
+  const works = (cmd, pre) => {
+    const r = spawnSync(cmd, [...pre, '--version'], { encoding: 'utf8', timeout: 60000 });
+    return r.status === 0 && /claude/i.test(r.stdout || '');
+  };
+  if (works('claude', [])) return { cmd: 'claude', pre: [], where: 'Termux' };
+  // Claude Code's native build needs a regular Linux: look in proot-distro installs (Ubuntu, Debian, …).
+  const rootfs = path.join(PREFIX_DIR, 'var/lib/proot-distro/installed-rootfs');
+  let distros = [];
+  try { distros = fs.readdirSync(rootfs); } catch {}
+  if (process.env.SLATE_DISTRO) distros = [process.env.SLATE_DISTRO];
+  for (const d of distros) {
+    const pre = ['login', d, '--', 'sh', '-c', 'PATH="$HOME/.local/bin:$PATH"; exec claude "$@"', 'claude'];
+    if (works('proot-distro', pre)) return { cmd: 'proot-distro', pre, where: `proot-distro ${d}` };
+  }
+  return null;
+}
+
+let CLAUDE = null;
 
 function log(...a) {
   console.log(new Date().toTimeString().slice(0, 8), ...a);
@@ -72,7 +98,7 @@ function userMessage(images, text) {
 }
 
 function startClaude(args) {
-  const child = spawn(CLAUDE, ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', ...args], {
+  const child = spawn(CLAUDE.cmd, [...CLAUDE.pre, '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', ...args], {
     cwd: WORK,
     stdio: ['pipe', 'pipe', 'pipe'],
     env: process.env,
@@ -182,7 +208,7 @@ async function ask(req, res) {
   if (!d || d.error) {
     let why = (d && d.result) || out.errors || `Claude Code exited with code ${out.code}.`;
     if (/login|auth|credential/i.test(why)) why += ' — run `claude` in Termux once and sign in.';
-    if (/ENOENT/.test(why)) why = 'Claude Code isn\'t installed in Termux: npm install -g @anthropic-ai/claude-code';
+    if (/ENOENT|native binary/.test(why)) why = 'Claude Code didn\'t start in Termux. Run slate-claude again to see why.';
     send({ t: 'ask.status', askId, state: 'error', message: why, session });
   } else {
     send({ t: 'ask.done', askId, session: d.session || session, backend: 'termux', title: b.title || '', markdown: d.result || out.streamed, cost: d.cost });
@@ -232,7 +258,23 @@ if (require.main === module) {
     console.error('No token: run the setup command from Slate (main screen › Claude Code on this tablet).');
     process.exit(1);
   }
-  server.listen(PORT, '127.0.0.1', () => log(`Slate bridge ready on 127.0.0.1:${PORT} using "${CLAUDE}". Leave this running; Ctrl+C stops it.`));
+  log('Looking for Claude Code…');
+  CLAUDE = findClaude();
+  if (!CLAUDE) {
+    console.error([
+      'Claude Code doesn\'t run here. On Android it needs a Linux distro inside Termux (one-time):',
+      '  pkg install proot-distro',
+      '  proot-distro install ubuntu',
+      '  proot-distro login ubuntu',
+      '    apt update && apt install -y curl',
+      '    curl -fsSL https://claude.ai/install.sh | bash',
+      '    ~/.local/bin/claude          (sign in, then /exit)',
+      '    exit',
+      'Then run slate-claude again.',
+    ].join('\n'));
+    process.exit(1);
+  }
+  server.listen(PORT, '127.0.0.1', () => log(`Slate bridge ready on 127.0.0.1:${PORT}, using Claude Code in ${CLAUDE.where}. Leave this running; Ctrl+C stops it.`));
 }
 
-module.exports = { parseLine, userMessage, server };
+module.exports = { parseLine, userMessage, server, findClaude, useClaude: c => { CLAUDE = c; } };

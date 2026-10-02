@@ -72,7 +72,7 @@
     <string name="side_chat_on">The floating chat box is on: answers appear in it, on top of whatever you\'re looking at.</string>
 
     <string name="termux_header">Claude Code on this tablet (your Claude subscription)</string>
-    <string name="termux_help">Without the PC, Ask can use Claude Code running in Termux on this tablet, signed in with your Claude subscription, instead of the API key. One-time setup: install Termux and Claude Code (npm install -g @anthropic-ai/claude-code, then run claude once to sign in). Tap Set up (it copies a command), paste it into Termux and press Enter, then run slate-claude there whenever you want to use it (leave Termux open).</string>
+    <string name="termux_help">Without the PC, Ask can use Claude Code on this tablet, signed in with your Claude subscription, instead of the API key. Claude Code needs a Linux distro inside Termux (one-time: pkg install proot-distro, proot-distro install ubuntu, then in proot-distro login ubuntu: curl -fsSL https://claude.ai/install.sh | bash and run claude once to sign in). Then tap Set up (it copies a command), paste it into Termux, and run slate-claude there whenever you want to use it (leave Termux open). It finds Claude Code by itself.</string>
     <string name="termux_setup">Set up…</string>
     <string name="termux_check">Check</string>
     <string name="termux_ok">✓ Claude Code in Termux is connected.</string>
