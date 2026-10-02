@@ -138,13 +138,12 @@ object TermuxClaude {
         cat > "${'$'}PREFIX/bin/slate-claude" <<'EOS'
         #!/data/data/com.termux/files/usr/bin/sh
         termux-wake-lock 2>/dev/null || true
+        pkill -f slate-bridge.js 2>/dev/null && sleep 1
         exec node "${'$'}HOME/.slate/slate-bridge.js" "${'$'}@"
         EOS
         chmod +x "${'$'}PREFIX/bin/slate-claude"
-        if ! command -v claude >/dev/null 2>&1; then
-          echo "Claude Code isn't installed yet: run  npm install -g @anthropic-ai/claude-code  then  claude  once to sign in."
-        fi
-        echo "Done. Start it with:  slate-claude   (leave Termux running while you study)"
+        pkill -f slate-bridge.js 2>/dev/null || true
+        echo "Done. Start it with:  slate-claude   (it finds Claude Code in Termux or in a proot-distro Linux; leave Termux running while you study)"
         """.trimIndent().replace("@BRIDGE@", bridge.trimEnd()) + "\n"
     }
 }

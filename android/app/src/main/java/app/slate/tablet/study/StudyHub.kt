@@ -87,6 +87,7 @@ object StudyHub {
         } else if (pc && session.backend != "tablet") {
             val header = JSONObject().put("t", "ask").put("askId", askId).put("intent", intent).put("title", session.title)
                 .put("session", session.remote).put("new", session.remote.isEmpty()).put("text", text)
+                .put("model", Prefs(appContext!!).askModel)
             val sizes = JSONArray()
             images.forEach { (name, bytes) -> sizes.put(JSONObject().put("name", name).put("size", bytes.size)) }
             header.put("images", sizes)
@@ -97,7 +98,7 @@ object StudyHub {
             thread(name = "slate-ask", isDaemon = true) {
                 try {
                     val history = store.entries(session.id).filter { it.askId != askId && it.state == "done" }
-                    val (markdown, cost) = TabletAsk.ask(apiKey, intent, images, history, text)
+                    val (markdown, cost) = TabletAsk.ask(apiKey, intent, images, history, text, Prefs(appContext!!).askModel)
                     store.updateEntry(askId) { it.copy(markdown = markdown, state = "done", status = "", costUsd = cost) }
                 } catch (e: Exception) {
                     Log.w(TAG, "Ask failed", e)
@@ -127,6 +128,7 @@ object StudyHub {
         images.forEach { (name, bytes) -> imgs.put(JSONObject().put("name", name).put("type", "image/jpeg").put("data", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP))) }
         val body = JSONObject().put("askId", askId).put("session", session.remote).put("new", session.remote.isEmpty())
             .put("title", session.title).put("system", TabletAsk.SYSTEM).put("text", words.joinToString("\n\n")).put("images", imgs)
+            .put("model", Prefs(ctx).askModel)
         thread(name = "slate-ask-termux", isDaemon = true) {
             val error = TermuxClaude.ask(ctx, body) { o -> main.post { onPcMessage(o) } }
             if (error != null) main.post { if (store.entries(session.id).any { it.askId == askId && it.state == "pending" }) fail(askId, error) }

@@ -90,6 +90,9 @@ public class ClaudeCodeRunnerTests
         Assert.Contains("stream-json", fresh);
         Assert.Contains("dontAsk", fresh);
         Assert.Equal(new[] { "--resume", "u-1" }, ClaudeCodeRunner.Args(false, "u-1", "x", "p.md").TakeLast(2));
+        Assert.Contains("--model", ClaudeCodeRunner.Args(false, "u-1", "x", "p.md", "sonnet"));
+        Assert.DoesNotContain("--model", ClaudeCodeRunner.Args(false, "u-1", "x", "p.md", "bad; rm -rf"));
+        Assert.Equal("opus", AskRequest.FromBlob(new System.Text.Json.Nodes.JsonObject { ["askId"] = "m", ["text"] = "hi", ["model"] = "opus" }, null)!.Model);
     }
 
     [Fact]

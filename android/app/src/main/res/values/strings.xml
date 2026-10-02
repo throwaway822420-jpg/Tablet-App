@@ -82,6 +82,7 @@
     <string name="close">Close</string>
     <string name="termux_copy">Copy command</string>
     <string name="termux_copied">Copied. Paste it into Termux.</string>
+    <string name="ask_model_label">Model for Ask and chat: %1$s (tap to change)</string>
     <string name="pref_ask_api_fallback">Ask may use the API key when neither the PC nor Claude Code is available</string>
     <string name="pref_writing_via_claude_code">Handwriting and calculator through Claude Code too (uses your subscription; about 3–5 s per conversion instead of 1–2 s)</string>
     <string name="status_idle">Not connected. Waiting for the PC over USB, or pick a PC below.</string>

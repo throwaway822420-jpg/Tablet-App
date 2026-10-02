@@ -149,7 +149,7 @@ internal sealed class AskService
         File.WriteAllText(systemFile, StudyPrompt.System);
 
         Status(r.AskId, "thinking", r.Images.Count > 0 ? "Claude is reading your screen…" : "Claude is thinking…", new JsonObject { ["session"] = session });
-        var outcome = await ClaudeCodeRunner.RunAsync(cli, dir, ClaudeCodeRunner.Args(fresh, session, "Slate: " + title, systemFile),
+        var outcome = await ClaudeCodeRunner.RunAsync(cli, dir, ClaudeCodeRunner.Args(fresh, session, "Slate: " + title, systemFile, r.Model),
             StudyPrompt.ForClaudeCode(r, paths), ev =>
             {
                 switch (ev)

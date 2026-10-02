@@ -274,6 +274,11 @@ if (require.main === module) {
     ].join('\n'));
     process.exit(1);
   }
+  server.on('error', e => {
+    if (e.code === 'EADDRINUSE') console.error(`Another Slate bridge is already running on port ${PORT}. Stop it (Ctrl+C in its Termux session, or: pkill -f slate-bridge.js) and run slate-claude again.`);
+    else console.error(e.message);
+    process.exit(1);
+  });
   server.listen(PORT, '127.0.0.1', () => log(`Slate bridge ready on 127.0.0.1:${PORT}, using Claude Code in ${CLAUDE.where}. Leave this running; Ctrl+C stops it.`));
 }
 

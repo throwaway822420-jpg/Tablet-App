@@ -10,6 +10,7 @@ import com.anthropic.models.beta.messages.MessageCreateParams
 /** Asking Claude Opus 5.5 straight from the tablet (no PC): used for tablet screenshots and when offline from the PC. */
 object TabletAsk {
     const val MODEL = "claude-opus-5-5"
+    const val SONNET = "claude-sonnet-5-5"
 
     val INTENTS = mapOf(
         "ask" to "Answer the question I've written on it.",
@@ -35,9 +36,9 @@ object TabletAsk {
     """.trimIndent()
 
     /** Blocking. Earlier answers in the session are included as text so follow-ups have context. */
-    fun ask(apiKey: String, intent: String, images: List<Pair<String, ByteArray>>, history: List<StudyStore.Entry>, text: String = ""): Pair<String, Double> {
+    fun ask(apiKey: String, intent: String, images: List<Pair<String, ByteArray>>, history: List<StudyStore.Entry>, text: String = "", model: String = ""): Pair<String, Double> {
         val b = MessageCreateParams.builder()
-            .model(MODEL)
+            .model(if (model == "sonnet") SONNET else MODEL)
             .maxTokens(16000L)
             .outputConfig(BetaOutputConfig.builder().effort(BetaOutputConfig.Effort.MEDIUM).build())
             .addBeta(Requests.FALLBACK_BETA)

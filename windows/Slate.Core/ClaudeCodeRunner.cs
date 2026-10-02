@@ -10,7 +10,8 @@ public static class ClaudeCodeRunner
     /// Arguments for a study turn: streamed JSON output, reads (the saved images) and web lookups
     /// allowed without prompting, anything else denied (nobody is there to approve it).
     /// </summary>
-    public static List<string> Args(bool fresh, string session, string name, string systemPromptFile)
+    /// <param name="model">"sonnet" / "opus", or empty for Claude Code's default model.</param>
+    public static List<string> Args(bool fresh, string session, string name, string systemPromptFile, string model = "")
     {
         var a = new List<string>
         {
@@ -18,6 +19,7 @@ public static class ClaudeCodeRunner
             "--permission-mode", "dontAsk", "--allowedTools", "Read,WebSearch,WebFetch",
             "--append-system-prompt-file", systemPromptFile,
         };
+        if (model is "sonnet" or "opus" or "haiku") a.AddRange(new[] { "--model", model });
         if (fresh) a.AddRange(new[] { "--session-id", session, "--name", name });
         else a.AddRange(new[] { "--resume", session });
         return a;

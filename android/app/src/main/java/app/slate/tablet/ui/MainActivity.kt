@@ -104,6 +104,16 @@ class MainActivity : Activity() {
                 .show()
         }
         bindSwitch(R.id.add_space, prefs.addSpaceAfterText) { prefs.addSpaceAfterText = it }
+        val models = listOf("" to "Claude Code default", "sonnet" to "Sonnet 5.5 (uses less of your limits)", "opus" to "Opus 5.5 (strongest)")
+        val modelButton = findViewById<Button>(R.id.ask_model)
+        fun showModel() { modelButton.text = getString(R.string.ask_model_label, models.firstOrNull { it.first == prefs.askModel }?.second ?: models[0].second) }
+        showModel()
+        modelButton.isAllCaps = false
+        modelButton.setOnClickListener {
+            val i = models.indexOfFirst { it.first == prefs.askModel }
+            prefs.askModel = models[(i + 1) % models.size].first
+            showModel()
+        }
         bindSwitch(R.id.ask_api_fallback, prefs.askApiFallback) { prefs.askApiFallback = it }
         bindSwitch(R.id.writing_via_claude_code, prefs.writingViaClaudeCode) { prefs.writingViaClaudeCode = it }
         findViewById<Button>(R.id.termux_check).setOnClickListener { checkTermux() }

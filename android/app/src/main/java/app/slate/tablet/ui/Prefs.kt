@@ -108,6 +108,11 @@ class Prefs(context: Context) {
         override val viaClaudeCode get() = writingViaClaudeCode
     }
 
+    /** Model for Ask and chat: "" = Claude Code's own default, or "sonnet" / "opus". */
+    var askModel: String
+        get() = p.getString("ask_model", "") ?: ""
+        set(v) = p.edit().putString("ask_model", v).apply()
+
     /** Ask may use the API key when neither the PC nor Claude Code in Termux is available. */
     var askApiFallback: Boolean
         get() = p.getBoolean("ask_api_fallback", false)

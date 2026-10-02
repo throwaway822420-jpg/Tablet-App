@@ -24,7 +24,8 @@ public sealed record AskRequest(
     string Intent,
     string Title,
     IReadOnlyList<(string Name, byte[] Data)> Images,
-    string Text = "")
+    string Text = "",
+    string Model = "")
 {
     /// <summary>
     /// Parses an "ask" message: header {askId, session, new, intent, title, text?, images:[{name, size}]}
@@ -49,7 +50,7 @@ public sealed record AskRequest(
         string id = header.Str("askId");
         string text = header.Str("text").Trim();
         if (id.Length == 0 || (images.Count == 0 && text.Length == 0)) return null;
-        return new AskRequest(id, header.Str("session"), header.Bool("new"), header.Str("intent", "ask"), header.Str("title"), images, text);
+        return new AskRequest(id, header.Str("session"), header.Bool("new"), header.Str("intent", "ask"), header.Str("title"), images, text, header.Str("model"));
     }
 
     /// <summary>Only simple image file names: the tablet never chooses where files go or what type they are.</summary>
