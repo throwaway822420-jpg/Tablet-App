@@ -88,7 +88,7 @@ class AskActivity : Activity() {
         }
         tool("Undo") { annotator.undo() }
         tool("Clear") { annotator.clear() }
-        tool("Cancel") { finish() }
+        tool("Cancel") { leave() }
         root.addView(tools, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP).apply { topMargin = dp(8) })
 
         // One tap sends with that intent.
@@ -119,6 +119,20 @@ class AskActivity : Activity() {
         setContentView(root)
         immersive()
     }
+
+    /**
+     * Done here. When this was opened over another app (the Ask Claude shortcut, or ✎ in the chat
+     * box), go back to that app rather than revealing whatever Slate screen was open underneath.
+     */
+    private fun leave() {
+        if (intent.getBooleanExtra(EXTRA_EXTERNAL, false)) moveTaskToBack(true)
+        finish()
+        @Suppress("DEPRECATION")
+        overridePendingTransition(0, 0)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() = leave()
 
     override fun onDestroy() {
         if (!sent) SideChat.resume()
@@ -181,7 +195,7 @@ class AskActivity : Activity() {
             runOnUiThread {
                 // The answer streams into the floating chat box over what you were looking at.
                 if (SideChat.show(this, sid)) {
-                    finish()
+                    leave()
                     return@runOnUiThread
                 }
                 startActivity(
@@ -220,6 +234,7 @@ class AskActivity : Activity() {
         const val EXTRA_IMAGE_PATH = "image_path"
         const val EXTRA_SESSION = "session"
         const val EXTRA_FOLLOW_UP = "follow_up"
+        const val EXTRA_EXTERNAL = "external"
 
         /**
          * Saves a screenshot to the cache and opens it for annotation. [newTask] puts it in Slate's
@@ -232,7 +247,7 @@ class AskActivity : Activity() {
             f.outputStream().use { screenshot.compress(Bitmap.CompressFormat.JPEG, 95, it) }
             val i = Intent(context, AskActivity::class.java).putExtra(EXTRA_IMAGE_PATH, f.absolutePath).putExtra(EXTRA_SESSION, sessionId)
                 .putExtra(EXTRA_FOLLOW_UP, followUp)
-            if (newTask || context !is Activity) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (newTask || context !is Activity) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(EXTRA_EXTERNAL, true)
             context.startActivity(i)
         }
     }
