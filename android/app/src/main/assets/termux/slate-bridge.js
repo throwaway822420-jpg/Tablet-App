@@ -35,24 +35,64 @@ function readFile(p) {
 
 const { spawnSync } = require('child_process');
 
-/** How to start Claude Code: a command plus the arguments that go before Claude Code's own. */
+/**
+ * How to start Claude Code: { where, spawn(args) }. In a proot-distro, `proot-distro login … -- cmd`
+ * joins the command's words with spaces (quoting is lost), so the arguments go through a file and a
+ * tiny wrapper inside the distro instead of on the command line.
+ */
 function findClaude() {
-  if (process.env.CLAUDE_BIN) return { cmd: process.env.CLAUDE_BIN, pre: [], where: process.env.CLAUDE_BIN };
-  const works = (cmd, pre) => {
-    const r = spawnSync(cmd, [...pre, '--version'], { encoding: 'utf8', timeout: 60000 });
-    return r.status === 0 && /claude/i.test(r.stdout || '');
+  const works = c => {
+    const child = c.spawnSync(['--version']);
+    return child.status === 0 && /claude/i.test(child.stdout || '');
   };
-  if (works('claude', [])) return { cmd: 'claude', pre: [], where: 'Termux' };
-  // Claude Code's native build needs a regular Linux: look in proot-distro installs (Ubuntu, Debian, …).
-  const rootfs = path.join(PREFIX_DIR, 'var/lib/proot-distro/installed-rootfs');
+  if (process.env.CLAUDE_BIN) return direct(process.env.CLAUDE_BIN, process.env.CLAUDE_BIN);
+  const plain = direct('claude', 'Termux');
+  if (works(plain)) return plain;
+  const base = process.env.SLATE_ROOTFS_DIR || path.join(PREFIX_DIR, 'var/lib/proot-distro/installed-rootfs');
   let distros = [];
-  try { distros = fs.readdirSync(rootfs); } catch {}
+  try { distros = fs.readdirSync(base); } catch {}
   if (process.env.SLATE_DISTRO) distros = [process.env.SLATE_DISTRO];
   for (const d of distros) {
-    const pre = ['login', d, '--', 'sh', '-c', 'PATH="$HOME/.local/bin:$PATH"; exec claude "$@"', 'claude'];
-    if (works('proot-distro', pre)) return { cmd: 'proot-distro', pre, where: `proot-distro ${d}` };
+    const c = inDistro(d, path.join(base, d));
+    if (c && works(c)) return c;
   }
   return null;
+}
+
+function direct(cmd, where) {
+  return {
+    where,
+    spawn: (args, opts) => spawn(cmd, args, opts),
+    spawnSync: args => spawnSync(cmd, args, { encoding: 'utf8', timeout: 60000 }),
+  };
+}
+
+const WRAPPER = `#!/bin/bash
+# Slate: runs Claude Code with the arguments in file $1 (NUL-separated), then deletes the file.
+mapfile -d '' -t args < "$1"; rm -f "$1"
+export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+exec claude "\${args[@]}"
+`;
+
+function inDistro(name, rootfs) {
+  try {
+    fs.mkdirSync(path.join(rootfs, 'usr/local/bin'), { recursive: true });
+    fs.mkdirSync(path.join(rootfs, 'tmp'), { recursive: true });
+    fs.writeFileSync(path.join(rootfs, 'usr/local/bin/slate-claude-run'), WRAPPER, { mode: 0o755 });
+  } catch (e) {
+    log(`Couldn't prepare ${name}: ${e.message}`);
+    return null;
+  }
+  const argsFile = args => {
+    const rel = `/tmp/slate-args-${crypto.randomBytes(6).toString('hex')}`;
+    fs.writeFileSync(path.join(rootfs, rel), args.map(a => String(a) + '\0').join(''));
+    return ['login', name, '--', '/usr/local/bin/slate-claude-run', rel];
+  };
+  return {
+    where: `proot-distro ${name}`,
+    spawn: (args, opts) => spawn('proot-distro', argsFile(args), opts),
+    spawnSync: args => spawnSync('proot-distro', argsFile(args), { encoding: 'utf8', timeout: 90000 }),
+  };
 }
 
 let CLAUDE = null;
@@ -98,7 +138,7 @@ function userMessage(images, text) {
 }
 
 function startClaude(args) {
-  const child = spawn(CLAUDE.cmd, [...CLAUDE.pre, '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', ...args], {
+  const child = CLAUDE.spawn(['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', ...args], {
     cwd: WORK,
     stdio: ['pipe', 'pipe', 'pipe'],
     env: process.env,

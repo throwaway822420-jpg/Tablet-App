@@ -15,7 +15,7 @@ function req(path, body, token) {
 server.listen(0, '127.0.0.1', async () => {
   try {
     const found = findClaude();
-    assert.equal(found.cmd, process.env.CLAUDE_BIN);
+    assert.equal(found.where, process.env.CLAUDE_BIN);
     useClaude(found);
     assert.equal(JSON.parse((await req('/health')).body).ok, true);
     assert.equal((await req('/ask', { askId: 'a' }, 'wrong')).status, 401);

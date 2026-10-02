@@ -1,0 +1,9 @@
+#!/bin/sh
+# Fake proot-distro, faithful to the part that matters: "login <distro> -- cmd args…" joins the
+# command's words with spaces and runs them through a shell, so quoting is lost. Paths under / are
+# mapped into the fake rootfs (no chroot in a test).
+[ "$1" = login ] || exit 2
+d="$2"; shift 2; [ "$1" = -- ] && shift
+ROOT="$SLATE_ROOTFS_DIR/$d"
+cmd=$(printf '%s' "$*" | sed "s#/usr/local/bin/#$ROOT/usr/local/bin/#g; s# /tmp/# $ROOT/tmp/#g")
+HOME="$ROOT/root" exec sh -c "$cmd"

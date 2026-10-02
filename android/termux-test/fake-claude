@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Fake Claude Code: checks the flags and the stream-json message, replies like the real one.
 const args = process.argv.slice(2);
+if (args.includes('--version')) { console.log('2.1.0 (Claude Code)'); process.exit(0); }
 let input = '';
 process.stdin.on('data', d => input += d);
 process.stdin.on('end', () => {
@@ -17,5 +18,5 @@ process.stdin.on('end', () => {
   }
   for (const w of ['You sent ', String(images), ' image(s): ', text]) out({ type: 'stream_event', parent_tool_use_id: null, event: { type: 'content_block_delta', delta: { type: 'text_delta', text: w } } });
   out({ type: 'stream_event', parent_tool_use_id: 'x', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'SUBAGENT' } } });
-  out({ type: 'result', subtype: 'success', is_error: false, result: `You sent ${images} image(s): ${text} [${args.includes('--tools') ? 'tools off' : 'tools on'}]`, session_id: sid, total_cost_usd: 0 });
+  out({ type: 'result', subtype: 'success', is_error: false, result: `You sent ${images} image(s): ${text} [${args.includes('--tools') ? 'tools off' : 'tools on'}] system=${JSON.stringify(args[args.indexOf('--system-prompt') + 1])}`, session_id: sid, total_cost_usd: 0 });
 });

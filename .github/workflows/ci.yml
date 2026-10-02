@@ -32,7 +32,7 @@ jobs:
       - uses: android-actions/setup-android@v3
       - run: ./gradlew --no-daemon testDebugUnitTest assembleDebug assembleRelease lintDebug
       - name: Termux bridge test (fake Claude Code)
-        run: node termux-test/bridge-test.js
+        run: node termux-test/bridge-test.js && node termux-test/proot-test.js
       - uses: actions/upload-artifact@v4
         with:
           name: slate-apk
