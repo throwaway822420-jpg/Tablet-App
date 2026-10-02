@@ -207,23 +207,7 @@ class StudyActivity : Activity() {
         header.text = session?.title ?: "New chat"
         buildActions(session)
         if (!pageReady) return
-        val entries = JSONArray()
-        if (session != null) {
-            val dir = StudyHub.store.dir(session.id)
-            for (e in StudyHub.store.entries(session.id)) {
-                entries.put(JSONObject()
-                    .put("id", e.askId)
-                    .put("label", StudyStore.INTENT_LABELS[e.intent] ?: "Question")
-                    .put("time", DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(e.time)))
-                    .put("image", if (e.image.isEmpty()) "" else "file://" + java.io.File(dir, e.image).absolutePath)
-                    .put("text", e.text)
-                    .put("markdown", if (e.state == "pending") StudyHub.liveText(e.askId) ?: "" else e.markdown)
-                    .put("state", e.state)
-                    .put("status", e.status)
-                    .put("cost", e.costUsd))
-            }
-        }
-        web.evaluateJavascript("render(${JSONObject.quote(entries.toString())})", null)
+        web.evaluateJavascript(Conversation.renderScript(session?.id), null)
     }
 
     private fun buildActions(session: StudyStore.Session?) {

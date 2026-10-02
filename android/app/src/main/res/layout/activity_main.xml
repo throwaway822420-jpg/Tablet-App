@@ -180,6 +180,13 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/study_ask_tablet" />
+
+            <Button
+                android:id="@+id/side_chat_permission"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/side_chat_permission" />
         </LinearLayout>
 
         <TextView

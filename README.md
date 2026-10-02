@@ -107,6 +107,10 @@ output mode; **Type it** types it instead.
 A system keyboard for the tablet itself: write in any app's text field and tap Enter. Turn it on
 once from Slate's main screen (Settings › Keyboard list). Works without a PC.
 
+It also has a plain typing layout: **⌨ Type** on the handwriting pad and **✎ Write** on the typing
+layout switch instantly inside the one keyboard (no closing and reopening). Its **⌨** key goes to
+your other keyboard (Samsung Keyboard) when you want autocorrect or swipe typing.
+
 To get to it from Samsung Keyboard (or any other), turn on the **Slate helper**
 accessibility service (main screen › Slate Keyboard › 3): a small **✎ Slate** button then sits
 just above any other keyboard while it's open, and one tap switches to Slate Keyboard (Android 11+).
@@ -146,6 +150,10 @@ write your question, then tap **Ask**, **Explain**, **Step by step**, **Just a h
   Needs Claude Code installed and signed in on the PC.
 - **Claude Desktop app**: the question is pasted into Claude Desktop as a normal chat (the app pops
   up the first time, then stays in the background); replies stay in the app.
+- **Floating chat box:** after you ask, the answer streams into a small chat box on top of whatever
+  you're looking at (like a side chat). Keep chatting there: type or handwrite a reply, ✎ draw on the
+  answer, drag it by its title, — to collapse, ⤢ to open in History. Needs Android's *Appear on top*
+  permission (Slate offers it the first time, or main screen › *Floating chat box…*).
 - **History** is also a chat: type (or handwrite with Slate Keyboard) in the message box to carry on
   the conversation, or **+ New chat**. **Follow up** / **✎ Draw** screenshots the answer so you can
   circle part of it and write your question on it. Answers render with maths and diagrams;

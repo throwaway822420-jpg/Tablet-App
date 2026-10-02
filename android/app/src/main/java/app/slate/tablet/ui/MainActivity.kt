@@ -77,6 +77,10 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.study_ask_tablet).setOnClickListener {
             startActivity(Intent(this, app.slate.tablet.study.CaptureActivity::class.java))
         }
+        findViewById<Button>(R.id.side_chat_permission).setOnClickListener {
+            if (app.slate.tablet.study.SideChat.canShow(this)) Toast.makeText(this, R.string.side_chat_on, Toast.LENGTH_LONG).show()
+            else app.slate.tablet.study.SideChat.requestPermission(this)
+        }
         val shortcutField = findViewById<EditText>(R.id.shortcuts).apply { setText(prefs.shortcuts) }
         findViewById<Button>(R.id.shortcuts_save).setOnClickListener {
             prefs.shortcuts = shortcutField.text.toString().ifBlank { Prefs.DEFAULT_SHORTCUTS }

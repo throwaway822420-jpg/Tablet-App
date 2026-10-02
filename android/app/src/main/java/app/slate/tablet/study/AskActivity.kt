@@ -33,10 +33,12 @@ class AskActivity : Activity() {
     private lateinit var annotator: Annotator
     private var sessionId: String? = null
     private var followUp = false
+    private var sent = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         StudyHub.init(this)
+        SideChat.suspend() // the chat box steps aside while you draw
         sessionId = intent.getStringExtra(EXTRA_SESSION)
         followUp = intent.getBooleanExtra(EXTRA_FOLLOW_UP, false)
 
@@ -118,6 +120,11 @@ class AskActivity : Activity() {
         immersive()
     }
 
+    override fun onDestroy() {
+        if (!sent) SideChat.resume()
+        super.onDestroy()
+    }
+
     private val where by lazy { TextView(this) }
 
     private fun updateWhere() {
@@ -164,6 +171,7 @@ class AskActivity : Activity() {
         val annotated = annotator.composite()
         val crop = if (followUp) null else annotator.circledCrop(annotated)
         val session = sessionId
+        sent = true
         thread(name = "slate-ask-prep", isDaemon = true) {
             val images = buildList {
                 add((if (followUp) "answer.jpg" else "screen.jpg") to Annotator.jpeg(annotated))
@@ -171,10 +179,26 @@ class AskActivity : Activity() {
             }
             val sid = StudyHub.ask(session, intentKey, images, "", prefs.apiKey)
             runOnUiThread {
+                // The answer streams into the floating chat box over what you were looking at.
+                if (SideChat.show(this, sid)) {
+                    finish()
+                    return@runOnUiThread
+                }
                 startActivity(
                     Intent(this, StudyActivity::class.java).putExtra(StudyActivity.EXTRA_SESSION, sid)
                         .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
                 )
+                if (!prefs.sideChatAsked) {
+                    prefs.sideChatAsked = true
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("Answers in a floating chat box?")
+                        .setMessage("Slate can show Claude's answer in a small chat box on top of whatever you're looking at, where you can keep chatting. It needs Android's \"Appear on top\" permission for Slate.")
+                        .setPositiveButton("Allow") { _, _ -> SideChat.requestPermission(this); finish() }
+                        .setNegativeButton("Not now") { _, _ -> finish() }
+                        .setOnCancelListener { finish() }
+                        .show()
+                    return@runOnUiThread
+                }
                 finish()
             }
         }
@@ -202,14 +226,14 @@ class AskActivity : Activity() {
          * own task (used by the Ask Claude shortcut, whose capture task then goes away, so the next
          * tap captures afresh instead of bringing back this screen).
          */
-        fun start(activity: Activity, screenshot: Bitmap, sessionId: String? = null, followUp: Boolean = false, newTask: Boolean = false) {
-            val f = File(activity.cacheDir, "ask-screen-${System.currentTimeMillis()}.jpg")
-            activity.cacheDir.listFiles { x -> x.name.startsWith("ask-screen") }?.forEach { it.delete() }
+        fun start(context: android.content.Context, screenshot: Bitmap, sessionId: String? = null, followUp: Boolean = false, newTask: Boolean = false) {
+            val f = File(context.cacheDir, "ask-screen-${System.currentTimeMillis()}.jpg")
+            context.cacheDir.listFiles { x -> x.name.startsWith("ask-screen") }?.forEach { it.delete() }
             f.outputStream().use { screenshot.compress(Bitmap.CompressFormat.JPEG, 95, it) }
-            val i = Intent(activity, AskActivity::class.java).putExtra(EXTRA_IMAGE_PATH, f.absolutePath).putExtra(EXTRA_SESSION, sessionId)
+            val i = Intent(context, AskActivity::class.java).putExtra(EXTRA_IMAGE_PATH, f.absolutePath).putExtra(EXTRA_SESSION, sessionId)
                 .putExtra(EXTRA_FOLLOW_UP, followUp)
-            if (newTask) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            activity.startActivity(i)
+            if (newTask || context !is Activity) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(i)
         }
     }
 }

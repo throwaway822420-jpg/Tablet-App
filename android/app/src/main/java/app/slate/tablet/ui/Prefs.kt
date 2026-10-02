@@ -107,6 +107,16 @@ class Prefs(context: Context) {
         override val fast get() = fastHandwriting
     }
 
+    /** Whether Slate has offered the floating chat box ("Appear on top" permission) yet. */
+    var sideChatAsked: Boolean
+        get() = p.getBoolean("side_chat_asked", false)
+        set(v) = p.edit().putBoolean("side_chat_asked", v).apply()
+
+    /** Slate Keyboard opens on its typing layout (true) or handwriting (false), as last used. */
+    var keyboardTyping: Boolean
+        get() = p.getBoolean("keyboard_typing", false)
+        set(v) = p.edit().putBoolean("keyboard_typing", v).apply()
+
     /** Read handwriting with Claude Haiku 4.5 instead of Sonnet 5.5. */
     var fastHandwriting: Boolean
         get() = p.getBoolean("fast_handwriting", false)

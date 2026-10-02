@@ -7,6 +7,8 @@
     <!-- Needed to receive the PCs' discovery broadcasts on many devices. -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Asking Claude about the tablet's own screen: Android's screen-capture permission, per use. -->
+    <!-- The floating chat box for answers ("Appear on top"), granted by the user in Settings. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 

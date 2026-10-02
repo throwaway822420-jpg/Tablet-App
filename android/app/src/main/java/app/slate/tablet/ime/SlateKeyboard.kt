@@ -38,12 +38,14 @@ class SlateKeyboard : InputMethodService() {
         }
     }
 
+    private var typing: TypingKeys? = null
+
     override fun onCreateInputView(): View {
         val prefs = Prefs(this)
         fun key(label: String, action: () -> Unit) = WritePanel.makeButton(this, label, onClick = action)
         val p = WritePanel(
             this, target, prefs.panelSettings(), vertical = false,
-            extraButtons = listOf(key("⌨") { switchKeyboard() }),
+            extraButtons = listOf(key("⌨ Type") { showTyping(true) }),
             trailingButtons = listOf(
                 key("Space") { currentInputConnection?.commitText(" ", 1) },
                 key("⌫") { sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL) },
@@ -51,10 +53,50 @@ class SlateKeyboard : InputMethodService() {
             ),
         )
         panel = p
+        // Typing and handwriting live in one keyboard, so switching between them is instant.
+        val t = TypingKeys(this, object : TypingKeys.Actions {
+            override fun type(text: String) {
+                currentInputConnection?.commitText(text, 1)
+            }
+            override fun backspace() = deleteBack()
+            override fun enter() = newLineOrAction()
+            override fun toHandwriting() = showTyping(false)
+            override fun toOtherKeyboard() = switchKeyboard()
+        }).apply { setBackgroundColor(android.graphics.Color.rgb(30, 32, 36)) }
+        typing = t
         val height = (resources.displayMetrics.heightPixels * 0.38f).toInt()
         return FrameLayout(this).apply {
             addView(p, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height))
-        }
+            addView(t, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height))
+        }.also { showTyping(prefs.keyboardTyping) }
+    }
+
+    private fun showTyping(on: Boolean) {
+        panel?.visibility = if (on) View.GONE else View.VISIBLE
+        typing?.visibility = if (on) View.VISIBLE else View.GONE
+        if (on) panel?.pause() else panel?.writeView?.invalidate()
+        Prefs(this).keyboardTyping = on
+        if (on) updateAutoCaps()
+    }
+
+    /** Deletes the selection, or the character before the cursor (a whole emoji or surrogate pair). */
+    private fun deleteBack() {
+        val ic = currentInputConnection ?: return
+        if (!ic.getSelectedText(0).isNullOrEmpty()) ic.commitText("", 1) else sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+    }
+
+    /** Shift on at the start of a field or a sentence, where the field asks for it. */
+    private fun updateAutoCaps() {
+        val t = typing ?: return
+        if (t.visibility != View.VISIBLE) return
+        val info = currentInputEditorInfo ?: return t.autoCapitalise(false)
+        val caps = currentInputConnection?.getCursorCapsMode(info.inputType) ?: 0
+        t.autoCapitalise(caps != 0)
+    }
+
+    override fun onUpdateSelection(oldSelStart: Int, oldSelEnd: Int, newSelStart: Int, newSelEnd: Int, candidatesStart: Int, candidatesEnd: Int) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        updateAutoCaps()
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
@@ -65,6 +107,7 @@ class SlateKeyboard : InputMethodService() {
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         panel?.writeView?.invalidate()
+        updateAutoCaps()
     }
 
     /** Back to the previous keyboard; if there isn't one, show the keyboard picker. */
