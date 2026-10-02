@@ -4,38 +4,78 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 
 class TermuxSetupTest {
-    @Test fun setupScriptIsValidShellAndInstallsTheBridge() {
-        val bridge = File("src/main/assets/termux/slate-bridge.js").readText()
-        val script = TermuxClaude.setupScript("abc123", bridge)
+    private val assets = File("src/main/assets/termux")
+    private val bridge = File(assets, "slate-bridge.js").readText()
+    private val launcher = File(assets, "slate-claude.sh").readText()
+    private val starter = File(assets, "slate-bridge-start.sh").readText()
+    private val script = TermuxClaude.setupScript("abc123", bridge, launcher, starter)
+
+    @Test fun setupScriptIsValidShellAndCarriesTheFilesIntact() {
         val f = File.createTempFile("slate-setup", ".sh").apply { writeText(script); deleteOnExit() }
         val check = ProcessBuilder("sh", "-n", f.absolutePath).redirectErrorStream(true).start()
-        val output = check.inputStream.bufferedReader().readText()
-        assertEquals("sh -n: $output", 0, check.waitFor())
+        assertEquals("sh -n: " + check.inputStream.bufferedReader().readText(), 0, check.waitFor())
         assertTrue(script.contains("printf '%s' 'abc123' > \"\$HOME/.slate/token\""))
-        // The bridge travels inside the script, byte for byte.
-        val body = script.substringAfter("<<'SLATE_EOF'\n").substringBefore("\nSLATE_EOF\n")
-        assertEquals(bridge.trimEnd(), body)
-        // The launcher's lines must start at column 0 so the heredoc and shebang work.
-        assertTrue(script.lines().contains("#!/data/data/com.termux/files/usr/bin/sh"))
-        assertTrue(script.lines().contains("EOS"))
-        assertTrue(script.contains("exec node \"\$HOME/.slate/slate-bridge.js\" \"\$@\""))
+        for (shell in listOf(launcher, starter)) {
+            val c = ProcessBuilder("sh", "-n", "/dev/stdin").start()
+            c.outputStream.use { it.write(shell.toByteArray()) }
+            assertEquals(0, c.waitFor())
+        }
+    }
 
-        // Run it for real in a scratch home (where sh and node exist): it must install a working bridge.
+    /**
+     * End to end in a scratch "Termux": run the setup, then slate-claude. Claude Code exists only
+     * inside a fake proot-distro Ubuntu (whose login joins words like the real one), so the bridge
+     * must start in there and answer on 127.0.0.1.
+     */
+    @Test fun slateClaudeStartsTheBridgeInsideTheDistro() {
         if (ProcessBuilder("sh", "-c", "command -v node").start().waitFor() != 0) return
-        val home = kotlin.io.path.createTempDirectory("slate-home").toFile()
-        File(home, "usr/bin").mkdirs()
-        val run = ProcessBuilder("sh", f.absolutePath).redirectErrorStream(true).apply {
-            environment()["HOME"] = home.absolutePath
-            environment()["PREFIX"] = File(home, "usr").absolutePath
-        }.start()
-        val log = run.inputStream.bufferedReader().readText()
-        assertEquals(log, 0, run.waitFor())
-        assertEquals("abc123", File(home, ".slate/token").readText())
-        assertEquals(bridge.trimEnd() + "\n", File(home, ".slate/slate-bridge.js").readText())
-        assertTrue(File(home, "usr/bin/slate-claude").canExecute())
-        assertEquals(0, ProcessBuilder("node", "--check", File(home, ".slate/slate-bridge.js").absolutePath).start().waitFor())
-        home.deleteRecursively()
+        val node = ProcessBuilder("sh", "-c", "command -v node").start().inputStream.bufferedReader().readText().trim()
+        val tmp = kotlin.io.path.createTempDirectory("slate-termux").toFile()
+        try {
+            val home = File(tmp, "home").apply { mkdirs() }
+            val prefix = File(tmp, "usr").apply { File(this, "bin").mkdirs() }
+            val roots = File(tmp, "rootfs")
+            val ubuntu = File(roots, "ubuntu").apply { File(this, "root/.local/bin").mkdirs() }
+            val fakeBin = File(tmp, "fakebin").apply { mkdirs() }
+            File("../termux-test/fake-proot-distro").copyTo(File(fakeBin, "proot-distro")).setExecutable(true)
+            File("../termux-test/fake-claude").copyTo(File(ubuntu, "root/.local/bin/claude")).setExecutable(true)
+            java.nio.file.Files.createSymbolicLink(File(fakeBin, "node").toPath(), File(node).toPath())
+            val env = mapOf(
+                "HOME" to home.absolutePath, "PREFIX" to prefix.absolutePath, "SLATE_ROOTFS_DIR" to roots.absolutePath,
+                "PATH" to "${fakeBin.absolutePath}:/usr/bin:/bin", "SLATE_PORT" to "47829",
+            )
+            fun sh(vararg cmd: String) = ProcessBuilder(*cmd).redirectErrorStream(true).apply { environment().putAll(env) }
+            // Like the real `… | base64 -d | sh`: the script isn't on any command line (it pkills old bridges).
+            val scriptFile = File(tmp, "setup.sh").apply { writeText(script) }
+            val setup = sh("sh", scriptFile.absolutePath).start()
+            val setupLog = setup.inputStream.bufferedReader().readText()
+            assertEquals(setupLog, 0, setup.waitFor())
+            assertEquals(bridge.trimEnd() + "\n", File(home, ".slate/slate-bridge.js").readText())
+
+            val run = sh("sh", File(prefix, "bin/slate-claude").absolutePath).redirectOutput(File(tmp, "run.log")).start()
+            var authorised = false
+            val deadline = System.currentTimeMillis() + 20_000
+            while (System.currentTimeMillis() < deadline && !authorised) {
+                Thread.sleep(300)
+                authorised = runCatching {
+                    val c = URL("http://127.0.0.1:47829/health").openConnection() as HttpURLConnection
+                    c.setRequestProperty("x-slate-token", "abc123")
+                    c.inputStream.bufferedReader().readText().contains("\"authorised\":true")
+                }.getOrDefault(false)
+            }
+            run.destroy()
+            ProcessBuilder("pkill", "-f", tmp.absolutePath).start().waitFor() // the bridge, started under the scratch dir
+            val log = File(tmp, "run.log").readText()
+            assertTrue("bridge didn't come up:\n$log", authorised)
+            assertTrue(log, log.contains("inside ubuntu"))
+            assertTrue(log, log.contains("Slate bridge ready")) // inside the distro Claude Code is found plainly
+            assertEquals("abc123", File(ubuntu, "root/.slate/token").readText())
+        } finally {
+            tmp.deleteRecursively()
+        }
     }
 }

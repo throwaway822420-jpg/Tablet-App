@@ -118,13 +118,14 @@ object TermuxClaude {
      * base64, because Slate can't serve files once it's in the background (Android freezes it).
      */
     fun setupCommand(context: Context): String {
-        val bridge = context.applicationContext.assets.open("termux/slate-bridge.js").use { it.readBytes().toString(Charsets.UTF_8) }
-        val b64 = android.util.Base64.encodeToString(setupScript(token(context), bridge).toByteArray(), android.util.Base64.NO_WRAP)
+        fun asset(name: String) = context.applicationContext.assets.open("termux/$name").use { it.readBytes().toString(Charsets.UTF_8) }
+        val script = setupScript(token(context), asset("slate-bridge.js"), asset("slate-claude.sh"), asset("slate-bridge-start.sh"))
+        val b64 = android.util.Base64.encodeToString(script.toByteArray(), android.util.Base64.NO_WRAP)
         return "echo $b64 | base64 -d | sh"
     }
 
-    internal fun setupScript(token: String, bridge: String): String {
-        require(!bridge.lines().contains("SLATE_EOF")) { "bridge contains the heredoc marker" }
+    internal fun setupScript(token: String, bridge: String, launcher: String, starter: String): String {
+        require(listOf(bridge, launcher, starter).none { "SLATE_EOF" in it.lines() }) { "a file contains the heredoc marker" }
         return """
         set -e
         echo "Setting up Slate's bridge to Claude Code…"
@@ -133,17 +134,20 @@ object TermuxClaude {
         cat > "${'$'}HOME/.slate/slate-bridge.js" <<'SLATE_EOF'
         @BRIDGE@
         SLATE_EOF
+        cat > "${'$'}HOME/.slate/slate-bridge-start" <<'SLATE_EOF'
+        @STARTER@
+        SLATE_EOF
         printf '%s' '$token' > "${'$'}HOME/.slate/token"
         chmod 600 "${'$'}HOME/.slate/token"
-        cat > "${'$'}PREFIX/bin/slate-claude" <<'EOS'
-        #!/data/data/com.termux/files/usr/bin/sh
-        termux-wake-lock 2>/dev/null || true
-        pkill -f slate-bridge.js 2>/dev/null && sleep 1
-        exec node "${'$'}HOME/.slate/slate-bridge.js" "${'$'}@"
-        EOS
+        cat > "${'$'}PREFIX/bin/slate-claude" <<'SLATE_EOF'
+        @LAUNCHER@
+        SLATE_EOF
         chmod +x "${'$'}PREFIX/bin/slate-claude"
-        pkill -f slate-bridge.js 2>/dev/null || true
-        echo "Done. Start it with:  slate-claude   (it finds Claude Code in Termux or in a proot-distro Linux; leave Termux running while you study)"
-        """.trimIndent().replace("@BRIDGE@", bridge.trimEnd()) + "\n"
+        pkill -f 'node .*/[.]slate/slate-bridge[.]js$' 2>/dev/null || true
+        echo "Done. Start it with:  slate-claude   (in Termux; it finds Claude Code in Termux or in your proot-distro Linux. Leave it running while you study.)"
+        """.trimIndent()
+            .replace("@BRIDGE@", bridge.trimEnd())
+            .replace("@STARTER@", starter.trimEnd())
+            .replace("@LAUNCHER@", launcher.trimEnd()) + "\n"
     }
 }

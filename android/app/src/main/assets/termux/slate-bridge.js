@@ -46,7 +46,9 @@ function findClaude() {
     return child.status === 0 && /claude/i.test(child.stdout || '');
   };
   if (process.env.CLAUDE_BIN) return direct(process.env.CLAUDE_BIN, process.env.CLAUDE_BIN);
-  const plain = direct('claude', 'Termux');
+  // Inside a proot-distro Linux (where slate-claude starts the bridge) /etc/os-release names it.
+  const osName = ((readFile('/etc/os-release') || '').match(/^PRETTY_NAME="?([^"\n]+)/m) || [])[1];
+  const plain = direct('claude', osName || 'Termux');
   if (works(plain)) return plain;
   const base = process.env.SLATE_ROOTFS_DIR || path.join(PREFIX_DIR, 'var/lib/proot-distro/installed-rootfs');
   let distros = [];
