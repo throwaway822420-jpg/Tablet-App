@@ -51,7 +51,17 @@ class WritePanel(
         val addSpace: Boolean
         /** Read handwriting with the faster, cheaper model. */
         val fast: Boolean get() = false
+        /** Convert through Claude Code in Termux (the Claude subscription) when it's running. */
+        val viaClaudeCode: Boolean get() = false
     }
+
+    /** Something to convert with: the API key, or Claude Code in Termux standing in for it. */
+    private fun credential(): String = settings.apiKey.ifBlank { if (settings.viaClaudeCode) CLAUDE_CODE else "" }
+
+    private fun useClaudeCode(key: String) =
+        settings.viaClaudeCode && app.slate.tablet.ai.TermuxClaude.available(context).also {
+            if (!it && key == CLAUDE_CODE) throw app.slate.tablet.ai.ClaudeFailure("Start slate-claude in Termux, or add an API key on Slate's main screen.")
+        }
 
     val ink = Ink()
     val writeView = WriteView(context, ink) { settings.dark }
@@ -63,8 +73,8 @@ class WritePanel(
     private var calcMode = false
 
     private val writer = InkConverter(
-        ink, { settings.apiKey },
-        convert = { key, png -> Recognizer.recognize(key, png, settings.fast) },
+        ink, ::credential,
+        convert = { key, png -> if (useClaudeCode(key)) Recognizer.viaClaudeCode(context, png, settings.fast) else Recognizer.recognize(key, png, settings.fast) },
         isEmpty = { it.isEmpty },
         deliver = { t, done -> target.type(t, effectiveMode(), done) },
         clearOnEnter = true,
@@ -73,8 +83,8 @@ class WritePanel(
     )
 
     private val calculator = InkConverter(
-        ink, { settings.apiKey },
-        convert = { key, png -> Calculator.solve(key, png) },
+        ink, ::credential,
+        convert = { key, png -> if (useClaudeCode(key)) Calculator.viaClaudeCode(context, png) else Calculator.solve(key, png) },
         isEmpty = { it.answer.isEmpty },
         deliver = { c, done -> target.copy(c.answer, effectiveMode(), done) },
         clearOnEnter = false,
@@ -162,7 +172,7 @@ class WritePanel(
         val mode = effectiveMode()
         setStatus(
             when (s) {
-                State.Empty -> if (settings.apiKey.isBlank()) "Add your Anthropic API key on Slate's main screen to turn writing into text."
+                State.Empty -> if (credential().isBlank()) "Add your Anthropic API key on Slate's main screen to turn writing into text."
                 else "Write here, then tap Enter. The eraser end or the S Pen button erases."
                 State.Writing -> ""
                 State.Converting -> "Converting…"
@@ -221,6 +231,7 @@ class WritePanel(
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     companion object {
+        private const val CLAUDE_CODE = "claude-code"
         val ACCENT = Color.rgb(40, 130, 90)
         val NORMAL = Color.argb(215, 60, 64, 72)
 

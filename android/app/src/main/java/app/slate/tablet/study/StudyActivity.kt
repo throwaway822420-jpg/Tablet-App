@@ -128,8 +128,8 @@ class StudyActivity : Activity() {
         val text = input.text.toString().trim()
         if (text.isEmpty()) return
         val prefs = app.slate.tablet.ui.Prefs(this)
-        if (!app.slate.tablet.link.BulkLink.connected && prefs.apiKey.isBlank()) {
-            Toast.makeText(this, "Connect the PC, or add your Anthropic API key on Slate's main screen.", Toast.LENGTH_LONG).show()
+        StudyHub.cannotAsk(this, selected)?.let {
+            Toast.makeText(this, it, Toast.LENGTH_LONG).show()
             return
         }
         input.setText("")
@@ -158,6 +158,7 @@ class StudyActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+        app.slate.tablet.ai.TermuxClaude.refresh(this)
         StudyHub.addListener(onChange)
         refreshList()
         render()
@@ -197,7 +198,8 @@ class StudyActivity : Activity() {
     private fun backendLabel(b: String) = when (b) {
         "code" -> "Claude Code"
         "desktop" -> "Claude Desktop"
-        "tablet" -> "tablet"
+        "tablet" -> "API key"
+        "termux" -> "Claude Code (tablet)"
         else -> "PC"
     }
 

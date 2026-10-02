@@ -61,6 +61,18 @@ object Calculator {
         }
     }
 
+    /** The same through Claude Code in Termux (the Claude subscription). Blocking. */
+    fun viaClaudeCode(context: android.content.Context, png: ByteArray): Calculation {
+        val json = app.slate.tablet.ai.TermuxClaude.convert(
+            context, "opus", "medium", SYSTEM_PROMPT, "Work out this handwritten calculation.", org.json.JSONObject(SCHEMA), png,
+        )
+        return try {
+            Calculation.fromJson(json)
+        } catch (e: JSONException) {
+            throw ClaudeFailure("Unexpected reply from Claude Code.")
+        }
+    }
+
     fun request(pngBase64: String): MessageCreateParams = MessageCreateParams.builder()
         .model(MODEL)
         .maxTokens(16000L)

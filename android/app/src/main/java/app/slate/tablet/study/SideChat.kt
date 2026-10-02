@@ -261,8 +261,8 @@ object SideChat {
         val text = field.text.toString().trim()
         if (text.isEmpty()) return
         val prefs = Prefs(app)
-        if (!BulkLink.connected && prefs.apiKey.isBlank()) {
-            Toast.makeText(app, "Connect the PC, or add your Anthropic API key on Slate's main screen.", Toast.LENGTH_LONG).show()
+        StudyHub.cannotAsk(app, session)?.let {
+            Toast.makeText(app, it, Toast.LENGTH_LONG).show()
             return
         }
         field.setText("")

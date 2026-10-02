@@ -40,6 +40,9 @@ class SlateKeyboard : InputMethodService() {
 
     private var typing: TypingKeys? = null
 
+    /** Never take over the screen in landscape: the app stays visible above the keyboard. */
+    override fun onEvaluateFullscreenMode() = false
+
     override fun onCreateInputView(): View {
         val prefs = Prefs(this)
         fun key(label: String, action: () -> Unit) = WritePanel.makeButton(this, label, onClick = action)
@@ -47,6 +50,9 @@ class SlateKeyboard : InputMethodService() {
             this, target, prefs.panelSettings(), vertical = false,
             extraButtons = listOf(key("⌨ Type") { showTyping(true) }),
             trailingButtons = listOf(
+                key(".") { currentInputConnection?.commitText(".", 1) },
+                key(",") { currentInputConnection?.commitText(",", 1) },
+                key("?") { currentInputConnection?.commitText("?", 1) },
                 key("Space") { currentInputConnection?.commitText(" ", 1) },
                 key("⌫") { sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL) },
                 key("↵") { newLineOrAction() },

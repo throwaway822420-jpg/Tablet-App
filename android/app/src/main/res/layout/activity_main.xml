@@ -191,6 +191,52 @@
 
         <TextView
             style="@style/SectionHeader"
+            android:text="@string/termux_header" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/termux_help" />
+
+        <TextView
+            android:id="@+id/termux_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textAppearance="@android:style/TextAppearance.DeviceDefault.Medium" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/termux_setup"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/termux_setup" />
+
+            <Button
+                android:id="@+id/termux_check"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/termux_check" />
+        </LinearLayout>
+
+        <Switch
+            android:id="@+id/ask_api_fallback"
+            style="@style/SettingSwitch"
+            android:text="@string/pref_ask_api_fallback" />
+
+        <Switch
+            android:id="@+id/writing_via_claude_code"
+            style="@style/SettingSwitch"
+            android:text="@string/pref_writing_via_claude_code" />
+
+        <TextView
+            style="@style/SectionHeader"
             android:text="@string/write_header" />
 
         <TextView

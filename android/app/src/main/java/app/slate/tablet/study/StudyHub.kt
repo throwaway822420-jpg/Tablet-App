@@ -4,7 +4,9 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import app.slate.tablet.ai.TermuxClaude
 import app.slate.tablet.link.BulkLink
+import app.slate.tablet.ui.Prefs
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -44,6 +46,20 @@ object StudyHub {
         main.post { listeners.forEach { it(sessionId) } }
     }
 
+    /** Why a question can't be sent right now, or null if it can (PC, Claude Code in Termux, or the API key). */
+    fun cannotAsk(context: Context, sessionId: String?): String? {
+        val backend = sessionId?.let { store.session(it)?.backend }
+        val termux = TermuxClaude.available(context)
+        val api = Prefs(context).let { it.askApiFallback && it.apiKey.isNotBlank() }
+        return when (backend) {
+            "termux" -> if (termux) null else "Start Claude Code in Termux (slate-claude), or start a + New chat."
+            "tablet" -> if (api) null else "This chat used the API key, which is off for Ask. Start a + New chat."
+            null -> if (BulkLink.connected || termux || api) null
+                else "Connect the PC or start Claude Code in Termux (slate-claude). Or allow the API key for Ask on Slate's main screen."
+            else -> if (BulkLink.connected) null else "This conversation is with Claude Code on the PC: connect the PC, or start a + New chat."
+        }
+    }
+
     /** Text streamed so far for a question still being answered. */
     fun liveText(askId: String): String? = live[askId]?.toString()
 
@@ -54,7 +70,7 @@ object StudyHub {
     fun ask(sessionId: String?, intent: String, images: List<Pair<String, ByteArray>>, title: String, apiKey: String, text: String = ""): String {
         val pc = BulkLink.connected
         val session = sessionId?.let { store.session(it) }
-            ?: store.newSession(title.ifBlank { if (text.isNotBlank()) text.take(40) else defaultTitle() }, if (pc) "pc" else "tablet")
+            ?: store.newSession(title.ifBlank { if (text.isNotBlank()) text.take(40) else defaultTitle() }, newBackend())
         val askId = UUID.randomUUID().toString()
         val imageName = if (images.isEmpty()) "" else "$askId.jpg"
         images.firstOrNull()?.let { File(store.dir(session.id), imageName).writeBytes(it.second) }
@@ -62,7 +78,13 @@ object StudyHub {
         store.addEntry(session.id, StudyStore.Entry(askId, System.currentTimeMillis(), intent, imageName, "", "pending", "Sending…", text = text))
         changed(session.id)
 
-        if (pc && session.backend != "tablet") {
+        if (session.backend == "termux") {
+            askTermux(session, askId, intent, images, text)
+        } else if (session.backend != "tablet" && !pc) {
+            fail(askId, "This conversation is with Claude Code on the PC. Connect the PC, or start a + New chat.")
+        } else if (session.backend == "tablet" && !Prefs(appContext!!).askApiFallback) {
+            fail(askId, "Start Claude Code in Termux (slate-claude) or connect the PC. (Or allow the API key for Ask on Slate's main screen.)")
+        } else if (pc && session.backend != "tablet") {
             val header = JSONObject().put("t", "ask").put("askId", askId).put("intent", intent).put("title", session.title)
                 .put("session", session.remote).put("new", session.remote.isEmpty()).put("text", text)
             val sizes = JSONArray()
@@ -85,6 +107,30 @@ object StudyHub {
             }
         }
         return session.id
+    }
+
+    /**
+     * Where a new conversation goes: the PC if connected, else Claude Code in Termux if running
+     * (both use the Claude subscription), else the API key. Call off the main thread.
+     */
+    private fun newBackend(): String = when {
+        BulkLink.connected -> "pc"
+        TermuxClaude.available(appContext!!) -> "termux"
+        else -> "tablet"
+    }
+
+    /** Claude Code in Termux on this tablet; it streams the same messages the PC sends. */
+    private fun askTermux(session: StudyStore.Session, askId: String, intent: String, images: List<Pair<String, ByteArray>>, text: String) {
+        val ctx = appContext ?: return
+        val words = listOfNotNull(if (intent == "chat") null else TabletAsk.INTENTS[intent] ?: TabletAsk.INTENTS.getValue("ask"), text.takeIf { it.isNotBlank() })
+        val imgs = JSONArray()
+        images.forEach { (name, bytes) -> imgs.put(JSONObject().put("name", name).put("type", "image/jpeg").put("data", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP))) }
+        val body = JSONObject().put("askId", askId).put("session", session.remote).put("new", session.remote.isEmpty())
+            .put("title", session.title).put("system", TabletAsk.SYSTEM).put("text", words.joinToString("\n\n")).put("images", imgs)
+        thread(name = "slate-ask-termux", isDaemon = true) {
+            val error = TermuxClaude.ask(ctx, body) { o -> main.post { onPcMessage(o) } }
+            if (error != null) main.post { if (store.entries(session.id).any { it.askId == askId && it.state == "pending" }) fail(askId, error) }
+        }
     }
 
     /**

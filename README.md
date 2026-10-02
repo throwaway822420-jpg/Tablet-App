@@ -150,6 +150,12 @@ write your question, then tap **Ask**, **Explain**, **Step by step**, **Just a h
   Needs Claude Code installed and signed in on the PC.
 - **Claude Desktop app**: the question is pasted into Claude Desktop as a normal chat (the app pops
   up the first time, then stays in the background); replies stay in the app.
+- **Your Claude subscription without the PC:** with Claude Code installed in Termux on the tablet,
+  Ask goes to it instead of the API key (main screen › *Claude Code on this tablet* › Set up: paste
+  the command into Termux, then run `slate-claude`). Order: PC → Claude Code in Termux → API key
+  (the last only if you allow it). Optionally handwriting and calculator go through it too (slower).
+  The bridge (`assets/termux/slate-bridge.js`) listens on 127.0.0.1 only and needs a token Slate
+  generated at setup; questions go in as one message with the images inline (no tool round trip).
 - **Floating chat box:** after you ask, the answer streams into a small chat box on top of whatever
   you're looking at (like a side chat). Keep chatting there: type or handwrite a reply, ✎ draw on the
   answer, drag it by its title, — to collapse, ⤢ to open in History. Needs Android's *Appear on top*

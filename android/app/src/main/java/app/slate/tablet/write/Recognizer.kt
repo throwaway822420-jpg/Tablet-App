@@ -26,6 +26,18 @@ object Recognizer {
         }
     }
 
+    /** The same transcription through Claude Code in Termux (the Claude subscription). Blocking. */
+    fun viaClaudeCode(context: android.content.Context, png: ByteArray, fast: Boolean): Transcript {
+        val json = app.slate.tablet.ai.TermuxClaude.convert(
+            context, if (fast) "haiku" else "sonnet", "low", SYSTEM_PROMPT, "Transcribe this handwriting.", org.json.JSONObject(SCHEMA), png,
+        )
+        return try {
+            Transcript.fromJson(json)
+        } catch (e: JSONException) {
+            throw ClaudeFailure("Unexpected reply from Claude Code.")
+        }
+    }
+
     /** The request for one handwriting image (base64 PNG). */
     fun request(pngBase64: String, fast: Boolean = false): MessageCreateParams = MessageCreateParams.builder()
         .model(if (fast) FAST_MODEL else MODEL)

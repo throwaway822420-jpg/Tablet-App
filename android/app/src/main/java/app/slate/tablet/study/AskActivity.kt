@@ -38,6 +38,7 @@ class AskActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         StudyHub.init(this)
+        app.slate.tablet.ai.TermuxClaude.refresh(this)
         SideChat.suspend() // the chat box steps aside while you draw
         sessionId = intent.getStringExtra(EXTRA_SESSION)
         followUp = intent.getBooleanExtra(EXTRA_FOLLOW_UP, false)
@@ -146,7 +147,15 @@ class AskActivity : Activity() {
         where.text = buildString {
             append(if (session != null) "Continuing: ${session.title}" else "New topic")
             append(" · ")
-            append(if (BulkLink.connected && session?.backend != "tablet") "answered via the PC" else "answered on the tablet (Claude Opus 5.5)")
+            append(
+                when {
+                    session?.backend == "termux" -> "answered by Claude Code on this tablet"
+                    session?.backend == "tablet" -> "answered with the API key (Claude Opus 5.5)"
+                    session != null || BulkLink.connected -> "answered via the PC"
+                    app.slate.tablet.ai.TermuxClaude.available(this@AskActivity) -> "answered by Claude Code on this tablet"
+                    else -> "answered with the API key (Claude Opus 5.5)"
+                },
+            )
             append(if (followUp) " · circle what you mean on the answer and write your question" else " · circle or highlight, write your question, then tap an intent")
         }
     }
@@ -174,8 +183,8 @@ class AskActivity : Activity() {
 
     private fun send(intentKey: String) {
         val prefs = Prefs(this)
-        if (!BulkLink.connected && prefs.apiKey.isBlank()) {
-            Toast.makeText(this, "Connect the PC, or add your Anthropic API key on Slate's main screen.", Toast.LENGTH_LONG).show()
+        StudyHub.cannotAsk(this, sessionId)?.let {
+            Toast.makeText(this, it, Toast.LENGTH_LONG).show()
             return
         }
         if (followUp && annotator.marks.isEmpty()) {

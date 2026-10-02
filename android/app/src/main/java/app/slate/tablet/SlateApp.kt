@@ -11,5 +11,6 @@ class SlateApp : Application() {
         Spend.init(this)
         app.slate.tablet.study.StudyHub.init(this)
         SlateLink.start()
+        app.slate.tablet.ai.TermuxClaude.refresh(this)
     }
 }

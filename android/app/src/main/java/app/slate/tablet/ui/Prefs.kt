@@ -105,7 +105,18 @@ class Prefs(context: Context) {
             set(v) { this@Prefs.outputMode = v }
         override val addSpace get() = addSpaceAfterText
         override val fast get() = fastHandwriting
+        override val viaClaudeCode get() = writingViaClaudeCode
     }
+
+    /** Ask may use the API key when neither the PC nor Claude Code in Termux is available. */
+    var askApiFallback: Boolean
+        get() = p.getBoolean("ask_api_fallback", false)
+        set(v) = p.edit().putBoolean("ask_api_fallback", v).apply()
+
+    /** Handwriting and calculator through Claude Code in Termux (subscription) when it's running. */
+    var writingViaClaudeCode: Boolean
+        get() = p.getBoolean("writing_via_claude_code", false)
+        set(v) = p.edit().putBoolean("writing_via_claude_code", v).apply()
 
     /** Whether Slate has offered the floating chat box ("Appear on top" permission) yet. */
     var sideChatAsked: Boolean

@@ -104,6 +104,10 @@ class MainActivity : Activity() {
                 .show()
         }
         bindSwitch(R.id.add_space, prefs.addSpaceAfterText) { prefs.addSpaceAfterText = it }
+        bindSwitch(R.id.ask_api_fallback, prefs.askApiFallback) { prefs.askApiFallback = it }
+        bindSwitch(R.id.writing_via_claude_code, prefs.writingViaClaudeCode) { prefs.writingViaClaudeCode = it }
+        findViewById<Button>(R.id.termux_check).setOnClickListener { checkTermux() }
+        findViewById<Button>(R.id.termux_setup).setOnClickListener { setUpTermux() }
         bindSwitch(R.id.fast_handwriting, prefs.fastHandwriting) { prefs.fastHandwriting = it }
         val keyField = findViewById<EditText>(R.id.api_key).apply { setText(prefs.apiKey) }
         findViewById<Button>(R.id.api_key_save).setOnClickListener {
@@ -130,9 +134,49 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         resumed = true
+        checkTermux()
         findViewById<TextView>(R.id.spend).text = getString(
             R.string.spend_label, app.slate.tablet.ai.Spend.thisMonthUsd(), app.slate.tablet.ai.Spend.callsThisMonth(),
         )
+    }
+
+    /** Shows whether the Termux bridge answers (checked off the main thread). */
+    private fun checkTermux(then: ((Boolean) -> Unit)? = null) {
+        val status = findViewById<TextView>(R.id.termux_status)
+        thread(isDaemon = true) {
+            val ok = app.slate.tablet.ai.TermuxClaude.available(this, fresh = true)
+            runOnUiThread {
+                status.setText(if (ok) R.string.termux_ok else R.string.termux_off)
+                then?.invoke(ok)
+            }
+        }
+    }
+
+    /** Serves the setup script on localhost while the dialog is open, and watches for the bridge. */
+    private fun setUpTermux() {
+        val tc = app.slate.tablet.ai.TermuxClaude
+        tc.startSetupServer(this)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.termux_setup_title)
+            .setMessage(getString(R.string.termux_setup_message, tc.SETUP_COMMAND))
+            .setPositiveButton(R.string.termux_copy, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setOnDismissListener { tc.stopSetupServer() }
+            .show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            getSystemService(android.content.ClipboardManager::class.java)
+                .setPrimaryClip(android.content.ClipData.newPlainText("Slate setup", tc.SETUP_COMMAND))
+            Toast.makeText(this, R.string.termux_copied, Toast.LENGTH_SHORT).show()
+        }
+        val poll = object : Runnable {
+            override fun run() {
+                if (!dialog.isShowing) return
+                checkTermux { ok ->
+                    if (ok) dialog.setTitle(getString(R.string.termux_ok)) else statusText.postDelayed(this, 2000)
+                }
+            }
+        }
+        statusText.postDelayed(poll, 2000)
     }
 
     override fun onPause() {
