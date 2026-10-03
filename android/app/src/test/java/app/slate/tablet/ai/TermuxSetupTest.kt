@@ -45,7 +45,10 @@ class TermuxSetupTest {
             File("../termux-test/fake-claude").copyTo(File(ubuntu, "root/.local/bin/claude")).setExecutable(true)
             java.nio.file.Files.createSymbolicLink(File(fakeBin, "node").toPath(), File(node).toPath())
             val env = mapOf(
-                "HOME" to home.absolutePath, "PREFIX" to prefix.absolutePath, "SLATE_ROOTFS_DIR" to roots.absolutePath,
+                // Like the tablet: slate-claude can't see the distros' files from outside (wrong/unknown
+                // path), so it must find Claude Code by asking proot-distro.
+                "HOME" to home.absolutePath, "PREFIX" to prefix.absolutePath, "SLATE_ROOTFS_DIR" to File(tmp, "nowhere").absolutePath,
+                "FAKE_ROOTS" to roots.absolutePath,
                 "PATH" to "${fakeBin.absolutePath}:/usr/bin:/bin", "SLATE_PORT" to "47829",
             )
             fun sh(vararg cmd: String) = ProcessBuilder(*cmd).redirectErrorStream(true).apply { environment().putAll(env) }

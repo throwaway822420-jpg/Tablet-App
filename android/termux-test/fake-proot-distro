@@ -4,6 +4,6 @@
 # mapped into the fake rootfs (no chroot in a test).
 [ "$1" = login ] || exit 2
 d="$2"; shift 2; [ "$1" = -- ] && shift
-ROOT="$SLATE_ROOTFS_DIR/$d"
-cmd=$(printf '%s' "$*" | sed "s#/usr/local/bin/#$ROOT/usr/local/bin/#g; s# /tmp/# $ROOT/tmp/#g")
+ROOT="${FAKE_ROOTS:-$SLATE_ROOTFS_DIR}/$d"
+cmd=$(printf '%s' "$*" | sed "s#/usr/local/bin/#$ROOT/usr/local/bin/#g; s# /tmp/# $ROOT/tmp/#g; s# /root/# $ROOT/root/#g; s# /usr/bin/claude# $ROOT/usr/bin/claude#g")
 HOME="$ROOT/root" exec sh -c "$cmd"

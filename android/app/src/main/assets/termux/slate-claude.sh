@@ -1,29 +1,39 @@
 #!/data/data/com.termux/files/usr/bin/sh
 # Slate: starts the bridge next to Claude Code. In Termux if Claude Code runs there; otherwise inside
-# the proot-distro Linux where it's installed (the bridge then runs in there as well, so no command
-# has to cross into the distro for each question).
+# the proot-distro Linux where it's installed. Everything goes through proot-distro itself (no guessing
+# where distros keep their files): it's asked whether Claude Code is there, and the bridge is sent in
+# on stdin, so nothing depends on quoting (proot-distro login joins a command's words with spaces).
 termux-wake-lock 2>/dev/null || true
 pkill -f 'node .*/[.]slate/slate-bridge[.]js$' 2>/dev/null && sleep 1
 if claude --version >/dev/null 2>&1; then
   exec node "$HOME/.slate/slate-bridge.js" "$@"
 fi
-ROOTS="${SLATE_ROOTFS_DIR:-$PREFIX/var/lib/proot-distro/installed-rootfs}"
-for d in "$ROOTS"/*; do
-  [ -d "$d" ] || continue
-  found=
-  # The installer's claude is a symlink with an absolute target inside the distro: test the link itself.
-  for f in "$d/root/.local/bin/claude" "$d/usr/local/bin/claude" "$d/usr/bin/claude"; do
-    if [ -L "$f" ] || [ -x "$f" ]; then found=1; fi
+
+if command -v proot-distro >/dev/null 2>&1; then
+  ROOTS="${SLATE_ROOTFS_DIR:-$PREFIX/var/lib/proot-distro/installed-rootfs}"
+  distros="${SLATE_DISTRO:-$(ls "$ROOTS" 2>/dev/null) ubuntu debian}"
+  tried=
+  for d in $distros; do
+    case " $tried " in *" $d "*) continue ;; esac
+    tried="$tried $d"
+    echo "Looking for Claude Code in $d…"
+    if proot-distro login "$d" -- test -e /root/.local/bin/claude -o -e /usr/local/bin/claude -o -e /usr/bin/claude </dev/null >/dev/null 2>&1; then
+      echo "Starting Slate's bridge inside $d, next to Claude Code…"
+      {
+        echo 'set -e'
+        echo 'mkdir -p "$HOME/.slate"'
+        echo "cat > \"\$HOME/.slate/slate-bridge.js\" <<'SLATE_JS'"
+        cat "$HOME/.slate/slate-bridge.js"
+        echo 'SLATE_JS'
+        echo "printf '%s' '$(cat "$HOME/.slate/token")' > \"\$HOME/.slate/token\""
+        cat "$HOME/.slate/slate-bridge-start"
+      } | proot-distro login "$d" -- sh -s
+      exit $?
+    fi
   done
-  [ -n "$found" ] || continue
-  name=$(basename "$d")
-  mkdir -p "$d/root/.slate" "$d/usr/local/bin"
-  cp "$HOME/.slate/slate-bridge.js" "$HOME/.slate/token" "$d/root/.slate/"
-  cp "$HOME/.slate/slate-bridge-start" "$d/usr/local/bin/slate-bridge-start"
-  chmod +x "$d/usr/local/bin/slate-bridge-start"
-  echo "Starting Slate's bridge inside $name, next to Claude Code…"
-  exec proot-distro login "$name" -- /usr/local/bin/slate-bridge-start
-done
+  [ -n "$tried" ] && echo "No Claude Code found in:$tried"
+fi
+
 cat <<'MSG'
 Claude Code isn't installed. On Android it needs a Linux distro inside Termux (one-time):
   pkg install proot-distro
