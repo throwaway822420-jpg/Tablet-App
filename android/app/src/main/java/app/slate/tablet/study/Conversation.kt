@@ -10,7 +10,10 @@ import java.util.Date
 object Conversation {
     fun entriesJson(sessionId: String?): String {
         val entries = JSONArray()
-        if (sessionId != null && StudyHub.store.session(sessionId) != null) {
+        val session = sessionId?.let { StudyHub.store.session(it) }
+        // Claude Code (PC or tablet) runs on the Claude subscription: its cost figure is only an API-price estimate.
+        val onPlan = session != null && session.backend != "tablet"
+        if (sessionId != null && session != null) {
             val dir = StudyHub.store.dir(sessionId)
             for (e in StudyHub.store.entries(sessionId)) {
                 entries.put(
@@ -23,7 +26,8 @@ object Conversation {
                         .put("markdown", if (e.state == "pending") StudyHub.liveText(e.askId) ?: "" else e.markdown)
                         .put("state", e.state)
                         .put("status", e.status)
-                        .put("cost", e.costUsd),
+                        .put("cost", e.costUsd)
+                        .put("plan", onPlan),
                 )
             }
         }

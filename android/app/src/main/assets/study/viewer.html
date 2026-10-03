@@ -57,7 +57,9 @@
       if (e.state === 'error') body = '<p class="error">' + esc(e.status || 'Something went wrong.') + '</p>';
       else if (e.state === 'pending' && !e.markdown) body = '<p class="pending">' + esc(e.status || 'Waiting for Claude…') + '</p>';
       else body = md(e.markdown) + (e.state === 'pending' ? '<p class="pending">…</p>' : '');
-      const cost = e.cost > 0 ? ' · ~$' + e.cost.toFixed(3) : '';
+      const cost = e.cost > 0
+        ? (e.plan ? ' · on your Claude plan (≈$' + e.cost.toFixed(2) + ' at API prices, not charged)' : ' · ~$' + e.cost.toFixed(3))
+        : (e.plan ? ' · on your Claude plan' : '');
       return '<div class="entry" id="e-' + esc(e.id) + '"><div class="meta"><b>' + esc(e.label) + '</b> · ' + esc(e.time) + cost + '</div>' +
              (e.text ? '<div class="you">' + esc(e.text) + '</div>' : '') +
              (e.image ? '<img class="shot" src="' + esc(e.image) + '" onerror="this.remove()">' : '') +

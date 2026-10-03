@@ -17,6 +17,8 @@ public static class ClaudeCodeRunner
         {
             "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
             "--permission-mode", "dontAsk", "--allowedTools", "Read,WebSearch,WebFetch",
+            // No MCP servers / claude.ai connectors or skills: their descriptions would ride along with every question.
+            "--strict-mcp-config", "--disable-slash-commands",
             "--append-system-prompt-file", systemPromptFile,
         };
         if (model is "sonnet" or "opus" or "haiku") a.AddRange(new[] { "--model", model });
@@ -43,6 +45,7 @@ public static class ClaudeCodeRunner
             StandardErrorEncoding = Encoding.UTF8,
             StandardInputEncoding = new UTF8Encoding(false),
         };
+        psi.Environment["ENABLE_CLAUDEAI_MCP_SERVERS"] = "false";
         foreach (var a in args) psi.ArgumentList.Add(a);
         using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Couldn't start Claude Code.");
         // The prompt goes in on stdin, which avoids command-line quoting rules for .cmd launchers.

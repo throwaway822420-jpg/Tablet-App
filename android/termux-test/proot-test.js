@@ -38,7 +38,7 @@ bridge.server.listen(0, '127.0.0.1', () => {
       try {
         const done = d.trim().split('\n').map(JSON.parse).at(-1);
         assert.equal(done.t, 'ask.done', d);
-        assert.ok(done.markdown.startsWith('You sent 1 image(s): What is a pole? [tools off]'), done.markdown);
+        assert.ok(done.markdown.startsWith('You sent 1 image(s): What is a pole? [tools off, mcp off]'), done.markdown);
         assert.ok(done.markdown.endsWith('system=' + JSON.stringify(system)), 'system prompt must arrive intact: ' + done.markdown);
         assert.deepEqual(fs.readdirSync(path.join(rootfs, 'ubuntu/tmp')), []); // argument files cleaned up
         console.log('proot tests passed');

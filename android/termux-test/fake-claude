@@ -18,5 +18,5 @@ process.stdin.on('end', () => {
   }
   for (const w of ['You sent ', String(images), ' image(s): ', text]) out({ type: 'stream_event', parent_tool_use_id: null, event: { type: 'content_block_delta', delta: { type: 'text_delta', text: w } } });
   out({ type: 'stream_event', parent_tool_use_id: 'x', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'SUBAGENT' } } });
-  out({ type: 'result', subtype: 'success', is_error: false, result: `You sent ${images} image(s): ${text} [${args.includes('--tools') ? 'tools off' : 'tools on'}] system=${JSON.stringify(args[args.indexOf('--system-prompt') + 1])}`, session_id: sid, total_cost_usd: 0 });
+  out({ type: 'result', subtype: 'success', is_error: false, result: `You sent ${images} image(s): ${text} [${args.includes('--tools') ? 'tools off' : 'tools on'}${args.includes('--strict-mcp-config') && process.env.ENABLE_CLAUDEAI_MCP_SERVERS === 'false' ? ', mcp off' : ''}] system=${JSON.stringify(args[args.indexOf('--system-prompt') + 1])}`, session_id: sid, total_cost_usd: 0 });
 });

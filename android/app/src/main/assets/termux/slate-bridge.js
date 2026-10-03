@@ -139,11 +139,15 @@ function userMessage(images, text) {
   return JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n';
 }
 
+// Keep each request lean: no MCP servers or claude.ai connectors (their tool descriptions would be
+// sent with every question), no skills, no user settings/plugins. Only Slate's own system prompt.
+const LEAN = ['--strict-mcp-config', '--disable-slash-commands', '--setting-sources', 'project'];
+
 function startClaude(args) {
-  const child = CLAUDE.spawn(['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', ...args], {
+  const child = CLAUDE.spawn(['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', ...LEAN, ...args], {
     cwd: WORK,
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: process.env,
+    env: { ...process.env, ENABLE_CLAUDEAI_MCP_SERVERS: 'false' },
   });
   child.stderrText = '';
   child.stderr.on('data', d => { child.stderrText = (child.stderrText + d).slice(-4000); });

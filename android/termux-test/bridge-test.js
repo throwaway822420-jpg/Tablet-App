@@ -29,7 +29,7 @@ server.listen(0, '127.0.0.1', async () => {
     assert.equal(deltas, 'You sent 1 image(s): What is a pole?');
     const done = lines.at(-1);
     assert.equal(done.t, 'ask.done'); assert.equal(done.session, sid); assert.equal(done.backend, 'termux');
-    assert.ok(done.markdown.includes('[tools off]'));
+    assert.ok(done.markdown.includes('[tools off, mcp off]'), done.markdown);
     const b = await req('/ask', { askId: 'a2', session: sid, text: 'and a zero?' }, 'secret123');
     const bl = b.body.trim().split('\n').map(JSON.parse);
     assert.equal(bl.at(-1).session, sid); // resumed the same session
